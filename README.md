@@ -50,6 +50,7 @@ MultiVis-Bench provides benchmark files:
 
 - **`text2vis.json`**, **`vis_modify.json`**, **`text2vis_with_img.json`**, **`text2vis_with_code.json`** under `MultiVis-Bench/`.
 - **`database/`** and **`img/`** subdirectories with databases and images used in benchmark tasks.
+- For the databases in `MultiVis-Bench/database/`, download the Spider dataset from [Google Drive](https://drive.google.com/file/d/1403EGqzIDoHMdQF4c9Bkyl7dZLZ5Wt6J/view) and extract **all database files** into the `MultiVis-Bench/database/` directory.
 
 ## Citation
 
