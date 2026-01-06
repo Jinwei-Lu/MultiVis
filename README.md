@@ -57,11 +57,18 @@ MultiVis-Bench provides benchmark files:
 If you find this project useful in your research, please cite:
 
 ```bibtex
-@inproceedings{lu2026multivisagent,
-  title     = {MultiVis-Agent: A Multi-Agent Framework with Logic Rules for Reliable and Comprehensive Cross-Modal Data Visualization},
+@article{Lu2026MultiVis,
   author    = {Lu, Jinwei and Song, Yuanfeng and Zhang, Chen and Wong, Raymond Chi-Wing},
-  booktitle = {Proceedings of the ACM SIGMOD International Conference on Management of Data (SIGMOD)},
-  year      = {2026}
+  title     = {MultiVis-Agent: A Multi-Agent Framework with Logic Rules for Reliable and Comprehensive Cross-Modal Data Visualization},
+  journal   = {Proc. ACM Manag. Data},
+  volume    = {4},
+  number    = {1},
+  articleno = {56},
+  year      = {2026},
+  month     = {feb},
+  publisher = {ACM},
+  address   = {Bengaluru, India},
+  doi       = {10.1145/3786670}
 }
 ```
 
