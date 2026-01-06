@@ -67,7 +67,6 @@ If you find this project useful in your research, please cite:
   year      = {2026},
   month     = {feb},
   publisher = {ACM},
-  address   = {Bengaluru, India},
   doi       = {10.1145/3786670}
 }
 ```
