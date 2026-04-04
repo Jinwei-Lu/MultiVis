@@ -24,122 +24,6 @@ class CoordinatorAgent(Agent):
     6. 收集最终结果并整合输出
     """
     
-    def __init__(self, model_type: str = "qwen-max-2025-01-25@qwen-vl-max-2025-01-25", agent_name: str = "coordinator_agent", agent_id: str = None, use_log: bool = False):
-        """初始化协调器智能体
-        
-        Args:
-            model_type: 使用的模型种类，格式为text_model@img_model，默认为qwen-max-2025-01-25@qwen-vl-max-2025-01-25
-            agent_name: 智能体名称
-            agent_id: 智能体ID
-            use_log: 是否使用日志
-        """
-        system_prompt = """You are a visualization system coordinator that efficiently orchestrates specialized agents to create high-quality data visualizations. Your task is to analyze requirements, coordinate data preparation, generate visualization code, and ensure quality through validation and iteration.
-
-## Task Types
-- Type A: Natural language query + database → visualization
-- Type B: Natural language query + database + reference images → visualization matching image style
-- Type C: Natural language query + database + reference code → visualization based on code patterns
-- Type D: Natural language query + database + existing visualization code → improved visualization
-
-## Core Workflow
-1. Determine task type and requirements
-2. Generate SQL to extract required data
-3. Generate visualization code
-4. Validate results and iterate until requirements are met
-
-## Tool Usage Guidelines
-- generate_sql_from_query: Creates SQL to extract data
-- generate_visualization_code: Creates visualization code
-- modify_visualization_code: Fixes code issues (ONLY after evaluate_visualization)
-- evaluate_visualization: Validates visualization and provides improvement recommendations
-
-## CRITICAL WORKFLOW RULES
-1. ALWAYS generate SQL first, then visualization code
-2. ALWAYS evaluate visualization before making modifications
-3. ONLY use modification tools with recommendations from evaluate_visualization
-4. Re-evaluate after each modification
-5. Continue until requirements are met or max iterations reached
-
-When complete, provide the final visualization code that meets all requirements.
-"""
-
-        super().__init__(model_type=model_type, system_prompt=system_prompt, agent_name=agent_name, agent_id=agent_id, use_log=use_log)
-        
-        # 初始化任务状态和中间结果存储
-        self.user_query = None
-        self.db_path = None
-        self.reference_path = None
-        self.existing_code = None
-        self.existing_code_path = None
-        self.task_type = None
-        self.sql_query = None
-        self.visualization_code = None
-        self.evaluation_result = None
-        
-        # 评估结果详细信息
-        self.evaluation_passed = False
-        self.sql_recommendations = []
-        self.recommendations = []
-        
-        # 初始化各专业智能体实例(用于注册工具)
-        self._db_agent = DatabaseQueryAgent(model_type=model_type, agent_id=agent_id, use_log=use_log)
-        self._code_agent = CodeGenerationAgent(model_type=model_type, agent_id=agent_id, use_log=use_log)
-        self._validation_agent = ValidationEvaluationAgent(model_type=model_type, agent_id=agent_id, use_log=use_log)
-
-        # 任务类型描述
-        self.task_descriptions = {
-            "A": "Basic visualization from natural language query and database",
-            "B": "Visualization matching reference image style",
-            "C": "Visualization based on reference code patterns",
-            "D": "Improvement of existing visualization code"
-        }
-        
-        # 注册各专业智能体工具
-        self._register_agent_tools()
-
-        self.chat_status(False)
-        
-        self._log("协调器智能体初始化完成")
-    
-    def _register_agent_tools(self):
-        """注册各专业智能体工具"""
-        # 1. 数据库与查询智能体工具
-        self.register_tool(
-            tool_name="generate_sql_from_query",
-            tool_func=self._generate_sql_from_query_tool,
-            tool_description="Generate SQL query based on user query and database schema",
-            tool_parameters={},
-            required=[]
-        )
-        
-        # 2. 代码生成智能体工具
-        self.register_tool(
-            tool_name="generate_visualization_code",
-            tool_func=self._generate_visualization_code_tool,
-            tool_description="Generate visualization code based on user query, database, and SQL query",
-            tool_parameters={},
-            required=[]
-        )
-        
-        self.register_tool(
-            tool_name="modify_visualization_code",
-            tool_func=self._modify_visualization_code_tool,
-            tool_description="Modify visualization code based on evaluation recommendations (ONLY use after evaluate_visualization)",
-            tool_parameters={},
-            required=[]
-        )
-        
-        # 3. 验证评估智能体工具
-        self.register_tool(
-            tool_name="evaluate_visualization",
-            tool_func=self._evaluate_visualization_tool,
-            tool_description="Evaluate if visualization meets requirements and provide improvement suggestions",
-            tool_parameters={},
-            required=[]
-        )
-        
-        self._log("智能体工具注册完成")
-    
     def _generate_sql_from_query_tool(self) -> Dict:
         """生成SQL查询工具
         
@@ -297,6 +181,122 @@ When complete, provide the final visualization code that meets all requirements.
                 "modification_count": recommendations_count
             }
     
+    def _register_agent_tools(self):
+        """注册各专业智能体工具"""
+        # 1. 数据库与查询智能体工具
+        self.register_tool(
+            tool_name="generate_sql_from_query",
+            tool_func=self._generate_sql_from_query_tool,
+            tool_description="Generate SQL query based on user query and database schema",
+            tool_parameters={},
+            required=[]
+        )
+        
+        # 2. 代码生成智能体工具
+        self.register_tool(
+            tool_name="generate_visualization_code",
+            tool_func=self._generate_visualization_code_tool,
+            tool_description="Generate visualization code based on user query, database, and SQL query",
+            tool_parameters={},
+            required=[]
+        )
+        
+        self.register_tool(
+            tool_name="modify_visualization_code",
+            tool_func=self._modify_visualization_code_tool,
+            tool_description="Modify visualization code based on evaluation recommendations (ONLY use after evaluate_visualization)",
+            tool_parameters={},
+            required=[]
+        )
+        
+        # 3. 验证评估智能体工具
+        self.register_tool(
+            tool_name="evaluate_visualization",
+            tool_func=self._evaluate_visualization_tool,
+            tool_description="Evaluate if visualization meets requirements and provide improvement suggestions",
+            tool_parameters={},
+            required=[]
+        )
+        
+        self._log("智能体工具注册完成")
+    
+    def __init__(self, model_type: str = "qwen-max-2025-01-25@qwen-vl-max-2025-01-25", agent_name: str = "coordinator_agent", agent_id: str = None, use_log: bool = False):
+        """初始化协调器智能体
+        
+        Args:
+            model_type: 使用的模型种类，格式为text_model@img_model，默认为qwen-max-2025-01-25@qwen-vl-max-2025-01-25
+            agent_name: 智能体名称
+            agent_id: 智能体ID
+            use_log: 是否使用日志
+        """
+        system_prompt = """You are a visualization system coordinator that efficiently orchestrates specialized agents to create high-quality data visualizations. Your task is to analyze requirements, coordinate data preparation, generate visualization code, and ensure quality through validation and iteration.
+
+## Task Types
+- Type A: Natural language query + database → visualization
+- Type B: Natural language query + database + reference images → visualization matching image style
+- Type C: Natural language query + database + reference code → visualization based on code patterns
+- Type D: Natural language query + database + existing visualization code → improved visualization
+
+## Core Workflow
+1. Determine task type and requirements
+2. Generate SQL to extract required data
+3. Generate visualization code
+4. Validate results and iterate until requirements are met
+
+## Tool Usage Guidelines
+- generate_sql_from_query: Creates SQL to extract data
+- generate_visualization_code: Creates visualization code
+- modify_visualization_code: Fixes code issues (ONLY after evaluate_visualization)
+- evaluate_visualization: Validates visualization and provides improvement recommendations
+
+## CRITICAL WORKFLOW RULES
+1. ALWAYS generate SQL first, then visualization code
+2. ALWAYS evaluate visualization before making modifications
+3. ONLY use modification tools with recommendations from evaluate_visualization
+4. Re-evaluate after each modification
+5. Continue until requirements are met or max iterations reached
+
+When complete, provide the final visualization code that meets all requirements.
+"""
+
+        super().__init__(model_type=model_type, system_prompt=system_prompt, agent_name=agent_name, agent_id=agent_id, use_log=use_log)
+        
+        # 初始化任务状态和中间结果存储
+        self.user_query = None
+        self.db_path = None
+        self.reference_path = None
+        self.existing_code = None
+        self.existing_code_path = None
+        self.task_type = None
+        self.sql_query = None
+        self.visualization_code = None
+        self.evaluation_result = None
+        
+        # 评估结果详细信息
+        self.evaluation_passed = False
+        self.sql_recommendations = []
+        self.recommendations = []
+        
+        # 初始化各专业智能体实例(用于注册工具)
+        self._db_agent = DatabaseQueryAgent(model_type=model_type, agent_id=agent_id, use_log=use_log)
+        self._code_agent = CodeGenerationAgent(model_type=model_type, agent_id=agent_id, use_log=use_log)
+        self._validation_agent = ValidationEvaluationAgent(model_type=model_type, agent_id=agent_id, use_log=use_log)
+
+        # 任务类型描述
+        self.task_descriptions = {
+            "A": "Basic visualization from natural language query and database",
+            "B": "Visualization matching reference image style",
+            "C": "Visualization based on reference code patterns",
+            "D": "Improvement of existing visualization code"
+        }
+        
+        # 注册各专业智能体工具
+        self._register_agent_tools()
+
+        self.chat_status(False)
+        
+        self._log("协调器智能体初始化完成")
+    
     def process_item(self, item: dict) -> dict:
         """处理数据集中的item
         
@@ -368,109 +368,6 @@ When complete, provide the final visualization code that meets all requirements.
         self.evaluation_passed = False
         self.sql_recommendations = []
         self.recommendations = []
-
-    def process_task(self, 
-                    user_query: str, 
-                    db_path: str, 
-                    reference_path: str = None,
-                    existing_code_path: str = None,
-                    max_iterations: int = 10) -> Tuple[bool, str]:
-        """处理可视化任务的主流程
-        
-        Args:
-            user_query: 用户查询
-            db_path: 数据库路径
-            reference_path: 参考图像或代码路径（可选）
-            existing_code: 已有的可视化代码（可选）
-            existing_code_path: 已有的可视化代码路径（可选）
-            max_iterations: 最大迭代次数
-            
-        Returns:
-            Tuple[bool, str]: 状态（成功/失败）和可视化代码
-        """
-        self._log(f"开始处理可视化任务")
-        
-        # 重置状态并保存初始参数
-        self._reset_state()
-        self.user_query = user_query
-        self.db_path = db_path
-        self.reference_path = reference_path
-        self.existing_code_path = existing_code_path
-
-        if existing_code_path:
-            try:
-                with open(existing_code_path, 'r', encoding='utf-8') as f:
-                    self.visualization_code = f.read()
-                    # self.force_failure = True
-                    self._log(f"成功加载已有代码: {existing_code_path}")
-
-            except Exception as e:
-                 self._log(f"加载已有代码失败 {existing_code_path}: {e}. Continuing without pre-loaded code.")
-                 self.visualization_code = None # Ensure it's None if loading failed
-        
-        # 确定任务类型
-        self.task_type = self._determine_task_type(user_query, db_path, reference_path, existing_code_path)
-        
-        # 构建初始提示词
-        initial_prompt = self._build_task_prompt(max_iterations)
-        
-        # ----- Pre-iteration Step -----
-        user_messages = [{"role": "user", "content": initial_prompt}]
-        
-        # Determine the first action based on task type
-        # if self.task_type == "D":
-        if False:
-            first_action_tool_name = "evaluate_visualization"
-            first_action_thought = "The task is type D (Improvement), so I need to evaluate the existing visualization first."
-            first_action_func = self._evaluate_visualization_tool
-            first_action_params = {} # No params needed for this tool wrapper
-        else:
-            first_action_tool_name = "generate_sql_from_query"
-            # first_action_thought = "The task is not type D, so I need to generate the SQL query first."
-            first_action_thought = "I need to generate the SQL query first."
-            first_action_func = self._generate_sql_from_query_tool
-            first_action_params = {} # No params needed for this tool wrapper
-
-        # Construct the first assistant message (thought + action)
-        first_action_json = json.dumps({"tool_name": first_action_tool_name, "parameters": first_action_params}, ensure_ascii=False)
-        assistant_content = f"<Thought>\n{first_action_thought}\n</Thought>\n<Action>\n{first_action_json}\n</Action>"
-        user_messages.append({"role": "assistant", "content": assistant_content})
-        
-        # Simulate the first observation
-        self._log(f"Executing pre-iteration step: {first_action_tool_name}")
-        try:
-            # Ensure necessary attributes are set before calling the tool function
-            # For generate_sql_from_query: user_query, db_path must be set
-            # For evaluate_visualization: user_query, visualization_code must be set (loaded above for type D)
-            first_observation_result = first_action_func()
-            self._log(f"Pre-iteration result: {first_observation_result}")
-        except Exception as e:
-            self._log(f"Error during pre-iteration execution of {first_action_tool_name}: {e}")
-            first_observation_result = {"status": False, "message": f"Error during pre-iteration: {e}"}
-
-        observation_content = f"<Observation>\n{json.dumps({'tool_name': first_action_tool_name, 'result': first_observation_result}, ensure_ascii=False)}\n</Observation>"
-        user_messages.append({"role": "user", "content": observation_content})
-        # ----- End Pre-iteration Step -----
-
-        # 启动ReAct处理模式
-        self._log(f"开始ReAct处理模式，任务类型：{self.task_type}, 使用预迭代历史.")
-        
-        # 使用ReAct模式执行任务，传入预迭代消息
-        result, used_tool = self.chat_ReAct(
-            user_messages=user_messages, # Use the pre-populated message list
-            # temperature=0.2,
-            max_iterations=max_iterations,
-        )
-        
-        self._log(f"ReAct模式处理完成，使用工具: {'是' if used_tool else '否'}")
-        
-        # 返回结果
-        if self.visualization_code:
-            self._log("任务处理成功")
-            return True, self.visualization_code
-        else:
-            self._log("任务处理失败：未生成可视化代码")
-            return False, "Failed to generate visualization code"
     
     def _build_task_prompt(self, max_iterations: int) -> str:
         """构建任务提示词
@@ -577,6 +474,109 @@ Start the workflow by calling generate_sql_from_query first.
         
         self._log(f"任务类型确定为：{task_type}")
         return task_type
+
+    def process_task(self, 
+                    user_query: str, 
+                    db_path: str, 
+                    reference_path: str = None,
+                    existing_code_path: str = None,
+                    max_iterations: int = 10) -> Tuple[bool, str]:
+        """处理可视化任务的主流程
+        
+        Args:
+            user_query: 用户查询
+            db_path: 数据库路径
+            reference_path: 参考图像或代码路径（可选）
+            existing_code: 已有的可视化代码（可选）
+            existing_code_path: 已有的可视化代码路径（可选）
+            max_iterations: 最大迭代次数
+            
+        Returns:
+            Tuple[bool, str]: 状态（成功/失败）和可视化代码
+        """
+        self._log(f"开始处理可视化任务")
+        
+        # 重置状态并保存初始参数
+        self._reset_state()
+        self.user_query = user_query
+        self.db_path = db_path
+        self.reference_path = reference_path
+        self.existing_code_path = existing_code_path
+
+        if existing_code_path:
+            try:
+                with open(existing_code_path, 'r', encoding='utf-8') as f:
+                    self.visualization_code = f.read()
+                    # self.force_failure = True
+                    self._log(f"成功加载已有代码: {existing_code_path}")
+
+            except Exception as e:
+                 self._log(f"加载已有代码失败 {existing_code_path}: {e}. Continuing without pre-loaded code.")
+                 self.visualization_code = None # Ensure it's None if loading failed
+        
+        # 确定任务类型
+        self.task_type = self._determine_task_type(user_query, db_path, reference_path, existing_code_path)
+        
+        # 构建初始提示词
+        initial_prompt = self._build_task_prompt(max_iterations)
+        
+        # ----- Pre-iteration Step -----
+        user_messages = [{"role": "user", "content": initial_prompt}]
+        
+        # Determine the first action based on task type
+        # if self.task_type == "D":
+        if False:
+            first_action_tool_name = "evaluate_visualization"
+            first_action_thought = "The task is type D (Improvement), so I need to evaluate the existing visualization first."
+            first_action_func = self._evaluate_visualization_tool
+            first_action_params = {} # No params needed for this tool wrapper
+        else:
+            first_action_tool_name = "generate_sql_from_query"
+            # first_action_thought = "The task is not type D, so I need to generate the SQL query first."
+            first_action_thought = "I need to generate the SQL query first."
+            first_action_func = self._generate_sql_from_query_tool
+            first_action_params = {} # No params needed for this tool wrapper
+
+        # Construct the first assistant message (thought + action)
+        first_action_json = json.dumps({"tool_name": first_action_tool_name, "parameters": first_action_params}, ensure_ascii=False)
+        assistant_content = f"<Thought>\n{first_action_thought}\n</Thought>\n<Action>\n{first_action_json}\n</Action>"
+        user_messages.append({"role": "assistant", "content": assistant_content})
+        
+        # Simulate the first observation
+        self._log(f"Executing pre-iteration step: {first_action_tool_name}")
+        try:
+            # Ensure necessary attributes are set before calling the tool function
+            # For generate_sql_from_query: user_query, db_path must be set
+            # For evaluate_visualization: user_query, visualization_code must be set (loaded above for type D)
+            first_observation_result = first_action_func()
+            self._log(f"Pre-iteration result: {first_observation_result}")
+        except Exception as e:
+            self._log(f"Error during pre-iteration execution of {first_action_tool_name}: {e}")
+            first_observation_result = {"status": False, "message": f"Error during pre-iteration: {e}"}
+
+        observation_content = f"<Observation>\n{json.dumps({'tool_name': first_action_tool_name, 'result': first_observation_result}, ensure_ascii=False)}\n</Observation>"
+        user_messages.append({"role": "user", "content": observation_content})
+        # ----- End Pre-iteration Step -----
+
+        # 启动ReAct处理模式
+        self._log(f"开始ReAct处理模式，任务类型：{self.task_type}, 使用预迭代历史.")
+        
+        # 使用ReAct模式执行任务，传入预迭代消息
+        result, used_tool = self.chat_ReAct(
+            user_messages=user_messages, # Use the pre-populated message list
+            # temperature=0.2,
+            max_iterations=max_iterations,
+        )
+        
+        self._log(f"ReAct模式处理完成，使用工具: {'是' if used_tool else '否'}")
+        
+        # 返回结果
+        if self.visualization_code:
+            self._log("任务处理成功")
+            return True, self.visualization_code
+        else:
+            self._log("任务处理失败：未生成可视化代码")
+            return False, "Failed to generate visualization code"
 
 
 if __name__ == "__main__":
