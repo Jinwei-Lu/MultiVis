@@ -322,6 +322,88 @@ def exec_altair_code_in_process(code_string, queue):
         queue.put(error_result)
 
 
+def _exec_altair_direct(code_string):
+    """
+    Execute Altair code directly without multiprocessing.
+    """
+    result = {
+        'success': False,
+        'chart': None,
+        'output': '',
+        'error': None
+    }
+    
+    stdout_capture = io.StringIO()
+    stderr_capture = io.StringIO()
+    
+    namespace = {
+        'alt': alt,
+        'pd': pd
+    }
+    
+    try:
+        last_expr_value = None
+        lines = code_string.split("\n")
+        lines_new = [line for line in lines if "exit(" not in line and ".to_json()" not in line and "print(" not in line]
+        modified_code = '\n'.join(lines_new).replace("exit()", "")
+        modified_code = modified_code.replace(".show()", "")
+        modified_code = modified_code.replace(".display(", "# .display(")
+        original_renderer = alt.renderers.active
+        alt.renderers.enable('default')
+        
+        try:
+            parsed_code = ast.parse(modified_code)
+            if parsed_code.body and isinstance(parsed_code.body[-1], ast.Expr):
+                last_expr = ast.unparse(parsed_code.body[-1])
+                code_without_last = ast.unparse(ast.Module(body=parsed_code.body[:-1], type_ignores=[]))
+                with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                    exec(code_without_last, namespace)
+                with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                    last_expr_value = eval(last_expr, namespace)
+            else:
+                with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                    exec(modified_code, namespace)
+        except SyntaxError:
+            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                exec(modified_code, namespace)
+        
+        chart = None
+        if isinstance(last_expr_value, alt.TopLevelMixin):
+            chart = last_expr_value
+        else:
+            if 'chart' in namespace and isinstance(namespace['chart'], alt.TopLevelMixin):
+                chart = namespace['chart']
+            else:
+                # Otherwise look for charts in variables, prioritizing more complex charts
+                chart_candidates = []
+                for var_name, var_value in namespace.items():
+                    if isinstance(var_value, alt.TopLevelMixin):
+                        chart_candidates.append((var_name, var_value))
+                
+                if chart_candidates:
+                    if len(chart_candidates) > 1:
+                        final_charts = [c for _, c in chart_candidates if hasattr(c, 'title') and c.title is not None]
+                        if final_charts:
+                            chart = final_charts[0]
+                        else:
+                            chart = chart_candidates[-1][1]
+                    else:
+                        chart = chart_candidates[0][1]
+        
+        result['success'] = True
+        result['chart'] = chart
+        result['output'] = stdout_capture.getvalue()
+        
+    except Exception as e:
+        result['success'] = False
+        result['error'] = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+        result['output'] = stdout_capture.getvalue() + stderr_capture.getvalue()
+    finally:
+        alt.renderers.enable(original_renderer)
+    
+    return result
+
+
 def exec_altair_code(code_string, timeout=60):
     """
     Execute a Python code string that uses the Altair library and return the result.
@@ -405,88 +487,6 @@ def exec_altair_code(code_string, timeout=60):
     except Exception as e:
         _log(f"Multiprocessing failed, falling back to direct execution: {str(e)}")
         return _exec_altair_direct(code_string)
-
-
-def _exec_altair_direct(code_string):
-    """
-    Execute Altair code directly without multiprocessing.
-    """
-    result = {
-        'success': False,
-        'chart': None,
-        'output': '',
-        'error': None
-    }
-    
-    stdout_capture = io.StringIO()
-    stderr_capture = io.StringIO()
-    
-    namespace = {
-        'alt': alt,
-        'pd': pd
-    }
-    
-    try:
-        last_expr_value = None
-        lines = code_string.split("\n")
-        lines_new = [line for line in lines if "exit(" not in line and ".to_json()" not in line and "print(" not in line]
-        modified_code = '\n'.join(lines_new).replace("exit()", "")
-        modified_code = modified_code.replace(".show()", "")
-        modified_code = modified_code.replace(".display(", "# .display(")
-        original_renderer = alt.renderers.active
-        alt.renderers.enable('default')
-        
-        try:
-            parsed_code = ast.parse(modified_code)
-            if parsed_code.body and isinstance(parsed_code.body[-1], ast.Expr):
-                last_expr = ast.unparse(parsed_code.body[-1])
-                code_without_last = ast.unparse(ast.Module(body=parsed_code.body[:-1], type_ignores=[]))
-                with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                    exec(code_without_last, namespace)
-                with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                    last_expr_value = eval(last_expr, namespace)
-            else:
-                with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                    exec(modified_code, namespace)
-        except SyntaxError:
-            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                exec(modified_code, namespace)
-        
-        chart = None
-        if isinstance(last_expr_value, alt.TopLevelMixin):
-            chart = last_expr_value
-        else:
-            if 'chart' in namespace and isinstance(namespace['chart'], alt.TopLevelMixin):
-                chart = namespace['chart']
-            else:
-                # Otherwise look for charts in variables, prioritizing more complex charts
-                chart_candidates = []
-                for var_name, var_value in namespace.items():
-                    if isinstance(var_value, alt.TopLevelMixin):
-                        chart_candidates.append((var_name, var_value))
-                
-                if chart_candidates:
-                    if len(chart_candidates) > 1:
-                        final_charts = [c for _, c in chart_candidates if hasattr(c, 'title') and c.title is not None]
-                        if final_charts:
-                            chart = final_charts[0]
-                        else:
-                            chart = chart_candidates[-1][1]
-                    else:
-                        chart = chart_candidates[0][1]
-        
-        result['success'] = True
-        result['chart'] = chart
-        result['output'] = stdout_capture.getvalue()
-        
-    except Exception as e:
-        result['success'] = False
-        result['error'] = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
-        result['output'] = stdout_capture.getvalue() + stderr_capture.getvalue()
-    finally:
-        alt.renderers.enable(original_renderer)
-    
-    return result
 
 def chart_to_img_url(chart: alt.Chart, format: str = 'png', max_size_mb: float = 5.0, scale_factor: float = 1.0, quality: int = 85) -> Tuple[bool, str]:
     """
@@ -1840,6 +1840,41 @@ class VisualizationMetrics:
                 
         return self.metrics, wrong_results, correct_results
     
+    def _update_metrics(self, metrics, processed, use_high_level_metrics, use_low_level_metrics, total_results):
+        """Helper method to update metrics from processed results"""
+        try:
+            low_level_scores = processed.get('low_level_scores', {})
+            high_level_scores = processed.get('high_level_scores', {})
+            low_level_overall_score = processed.get('low_level_overall_score', 0.0)
+            high_level_overall_score = processed.get('high_level_overall_score', 0.0)
+            
+            if use_low_level_metrics and low_level_scores:
+                metrics['low_level_overall_score'] += low_level_overall_score / total_results
+                for key, value in low_level_scores.items():
+                    if key in metrics['low_level_scores']:
+                        metrics['low_level_scores'][key] += value / total_results
+            
+            if use_high_level_metrics and high_level_scores:
+                metrics['high_level_overall_score'] += high_level_overall_score / total_results
+                for key, value in high_level_scores.items():
+                    if key in metrics['high_level_scores']:
+                        metrics['high_level_scores'][key] += value / total_results
+            
+            if use_low_level_metrics and use_high_level_metrics:
+                metrics['combined_overall_score'] += (low_level_overall_score + high_level_overall_score) / 2.0 / total_results
+            elif use_low_level_metrics:
+                metrics['combined_overall_score'] += low_level_overall_score / total_results
+            elif use_high_level_metrics:
+                metrics['combined_overall_score'] += high_level_overall_score / total_results
+        except Exception as e:
+            _log(f"Error updating metrics: {str(e)}")
+
+    def _evaluate_sequential_fallback(self, results, use_high_level_metrics, use_low_level_metrics):
+        """Fallback to sequential evaluation if parallel processing fails"""
+        _log("Using sequential evaluation fallback")
+        # Call the regular evaluate method which processes sequentially
+        return self.evaluate(results, use_high_level_metrics, use_low_level_metrics)
+    
     def evaluate_parallel(
         self,
         results: List[Dict[str, Any]],
@@ -1947,41 +1982,6 @@ class VisualizationMetrics:
         
         self.metrics = metrics
         return metrics, wrong_results, correct_results
-    
-    def _update_metrics(self, metrics, processed, use_high_level_metrics, use_low_level_metrics, total_results):
-        """Helper method to update metrics from processed results"""
-        try:
-            low_level_scores = processed.get('low_level_scores', {})
-            high_level_scores = processed.get('high_level_scores', {})
-            low_level_overall_score = processed.get('low_level_overall_score', 0.0)
-            high_level_overall_score = processed.get('high_level_overall_score', 0.0)
-            
-            if use_low_level_metrics and low_level_scores:
-                metrics['low_level_overall_score'] += low_level_overall_score / total_results
-                for key, value in low_level_scores.items():
-                    if key in metrics['low_level_scores']:
-                        metrics['low_level_scores'][key] += value / total_results
-            
-            if use_high_level_metrics and high_level_scores:
-                metrics['high_level_overall_score'] += high_level_overall_score / total_results
-                for key, value in high_level_scores.items():
-                    if key in metrics['high_level_scores']:
-                        metrics['high_level_scores'][key] += value / total_results
-            
-            if use_low_level_metrics and use_high_level_metrics:
-                metrics['combined_overall_score'] += (low_level_overall_score + high_level_overall_score) / 2.0 / total_results
-            elif use_low_level_metrics:
-                metrics['combined_overall_score'] += low_level_overall_score / total_results
-            elif use_high_level_metrics:
-                metrics['combined_overall_score'] += high_level_overall_score / total_results
-        except Exception as e:
-            _log(f"Error updating metrics: {str(e)}")
-
-    def _evaluate_sequential_fallback(self, results, use_high_level_metrics, use_low_level_metrics):
-        """Fallback to sequential evaluation if parallel processing fails"""
-        _log("Using sequential evaluation fallback")
-        # Call the regular evaluate method which processes sequentially
-        return self.evaluate(results, use_high_level_metrics, use_low_level_metrics)
 
 # 修改主函数部分，添加异常处理
 if __name__ == "__main__":
