@@ -26,94 +26,6 @@ class CodeGenerationAgent(Agent):
     该智能体主要依赖LLM的代码生成能力和Altair可视化库的知识。
     """
     
-    def __init__(self, model_type: str = "gemini-2.0-flash@gemini-2.0-flash", agent_name: str = "code_generation_agent", agent_id: str = 0, use_log: bool = False):
-        """初始化代码生成智能体
-        
-        Args:
-            model_type: 使用的模型种类，格式为text_model@img_model，默认为gemini-2.0-flash@gemini-2.0-flash
-            agent_name: 智能体名称
-            agent_id: 智能体ID
-        """
-        system_prompt = """You are a professional data visualization expert specializing in Altair. Your task is to generate and modify high-quality visualization code that is executable, efficient, and visually appealing.
-
-## Core Responsibilities
-1. Generate complete, executable Altair visualization code from user queries and SQL queries
-2. Modify existing visualization code according to user queries
-3. Ensure code quality, executability, and aesthetic design
-
-## Output Requirements
-- Provide complete, executable Python scripts with all necessary imports
-- Include appropriate SQL query integration and data processing
-- Focus only on implementing explicitly requested features (avoid adding unrequested elements)
-- Do not set width and height for charts unless specifically requested
-
-## Technical Guidelines
-- Handle data transformation appropriately for visualization
-- Design interactive elements when specified
-- Apply proper visual encoding principles
-- When using exec_altair_code:
-  * Thoroughly analyze any error messages
-  * Make comprehensive corrections before retrying
-  * Never retry without significant improvements to the code
-
-## Note
-- When users provide reference images/reference code/code for iteration, you MUST generate visualization code that has similar visual components, appearance, and structure to those references. This is a strict requirement.
-- Even when users don't explicitly restate all visualization requirements, maintain visual similarity to the provided references while incorporating any new specified requirements.
-- When users don't provide reference images/reference code/code for iteration, generate entirely new visualization code based on their requirements
-"""
-
-        super().__init__(model_type=model_type, system_prompt=system_prompt, agent_name=agent_name, agent_id=agent_id, use_log=use_log)
-        
-        # 注册代码执行工具
-        self._register_code_tools()
-        
-        self._log("代码生成智能体初始化完成")
-    
-    def _register_code_tools(self):
-        """注册代码相关工具"""
-        # 1. 执行代码工具
-        self.register_tool(
-            tool_name="exec_altair_code",
-            tool_func=self._exec_altair_code,
-            tool_description="Execute Python code implemented with Altair library and capture output or errors",
-            tool_parameters={
-                "code_string": {
-                    "type": "string",
-                    "description": "Python code with Altair library to execute"
-                }
-            },
-            required=["code_string"]
-        )
-        
-        # 2. 获取代码示例列表工具
-        self.register_tool(
-            tool_name="get_code_example_list",
-            tool_func=self._get_code_example_list,
-            tool_description="Get a list of available chart categories and types from the example directory",
-            tool_parameters={},
-            required=[]
-        )
-        
-        # 3. 获取特定代码示例工具
-        self.register_tool(
-            tool_name="get_code_example",
-            tool_func=self._get_code_example,
-            tool_description="Get specific example code based on chart category and type",
-            tool_parameters={
-                "chart_category": {
-                    "type": "string",
-                    "description": "The category of the chart (e.g., 'Bar Charts', 'Line Charts')"
-                },
-                "chart_type": {
-                    "type": "string",
-                    "description": "The specific type of chart within the category (e.g., 'stacked_bar_chart', 'line_chart_with_confidence_interval')"
-                }
-            },
-            required=["chart_category", "chart_type"]
-        )
-             
-        self._log("代码工具注册完成")
-    
     def _get_code_example_list(self) -> dict:
         """获取代码示例列表
         
@@ -177,14 +89,207 @@ class CodeGenerationAgent(Agent):
         except Exception as e:
             return {"status": "fail", "info": f"Error getting code example: {str(e)}"}
     
-    def _exec_altair_code(self, code_string) -> dict:
+    def _fix_indentation(self, code_string: str) -> str:
+        """修复代码中可能的缩进问题
         
-        _exec_altair_code_result = self._execute_altair_code(code_string, "./test_tmp/generated_chart.png")
+        Args:
+            code_string: 需要修复的代码字符串
+            
+        Returns:
+            str: 修复后的代码字符串
+        """
+        try:
+            # 尝试编译代码检查语法
+            compile(code_string, '<string>', 'exec')
+            return code_string  # 如果没有语法错误，直接返回原代码
+        except IndentationError:
+            self._log("检测到缩进错误，尝试修复")
+            
+            # 按行分割代码
+            lines = code_string.split('\n')
+            fixed_lines = []
+            current_indent = 0
+            indent_stack = [0]  # 用于跟踪缩进级别
+            
+            for i, line in enumerate(lines):
+                # 跳过空行
+                if not line.strip():
+                    fixed_lines.append(line)
+                    continue
+                
+                # 计算当前行的前导空格数
+                leading_spaces = len(line) - len(line.lstrip())
+                stripped_line = line.strip()
+                
+                # 检查是否是增加缩进的行（以冒号结尾）
+                if i > 0 and lines[i-1].strip().endswith(':'):
+                    # 上一行以冒号结尾，应该增加缩进
+                    current_indent = indent_stack[-1] + 4  # 增加一级缩进（4个空格）
+                    indent_stack.append(current_indent)
+                
+                # 检查是否是减少缩进的行
+                elif stripped_line.startswith(('elif', 'else:', 'except', 'finally:', 'except:')):
+                    # 回到上一级缩进
+                    if len(indent_stack) > 1:  # 确保不会弹出最初的0
+                        indent_stack.pop()
+                    current_indent = indent_stack[-1]
+                
+                # 检查是否是结束块的行
+                elif i > 0 and lines[i-1].strip() == '' and leading_spaces < current_indent:
+                    # 空行后缩进减少，可能是块结束
+                    while len(indent_stack) > 1 and leading_spaces < indent_stack[-1]:
+                        indent_stack.pop()
+                    current_indent = indent_stack[-1]
+                
+                # 应用当前缩进级别
+                fixed_line = ' ' * current_indent + stripped_line
+                fixed_lines.append(fixed_line)
+            
+            fixed_code = '\n'.join(fixed_lines)
+            self._log("缩进修复完成")
+            
+            # 再次检查修复后的代码
+            try:
+                compile(fixed_code, '<string>', 'exec')
+                return fixed_code
+            except Exception as e:
+                self._log(f"修复后的代码仍有语法错误: {e}，返回原始代码")
+                return code_string
+        except Exception as e:
+            self._log(f"修复缩进时出错: {e}，返回原始代码")
+            return code_string
+    
+    def _add_interactivity_layered(self, spec: dict) -> dict:
+        """为分层图表添加交互功能，将选择参数放到主数据层中"""
+        # 找到主数据层（第一个含有数据驱动 mark 的层）
+        target_layer = None
+        for layer in spec.get('layer', []):
+            mark = layer.get('mark', {})
+            mark_type = mark.get('type', '') if isinstance(mark, dict) else mark
+            if mark_type in ('bar', 'line', 'area', 'point', 'circle', 'square', 'rect'):
+                target_layer = layer
+                break
         
-        # Format the return value according to the required format
-        result = _exec_altair_code_result
+        if target_layer is None:
+            self._log("分层图表中未找到适合添加交互的数据层，跳过")
+            return spec
         
-        return result
+        existing_params = target_layer.get('params', [])
+        existing_names = {p.get('name') for p in existing_params if isinstance(p, dict)}
+        
+        params = []
+        if 'select' not in existing_names:
+            params.append({"name": "select", "select": {"type": "point", "on": "click"}})
+        if 'highlight' not in existing_names:
+            params.append({"name": "highlight", "select": {"type": "point", "on": "pointerover"}})
+        
+        if not params:
+            return spec
+        
+        target_layer['params'] = existing_params + params
+        
+        # 为主数据层添加颜色条件（empty: false 保证默认显示原始颜色）
+        if 'encoding' in target_layer and 'color' in target_layer['encoding']:
+            original_color = copy.deepcopy(target_layer['encoding']['color'])
+            # 跳过固定值颜色（如 {"value": "black"}），只处理字段映射颜色
+            if 'field' in original_color:
+                target_layer['encoding']['color'] = {
+                    "condition": [
+                        {"param": "select", "empty": False, "value": "orange"},
+                        {"param": "highlight", "empty": False, "value": "gold"}
+                    ],
+                    **original_color
+                }
+        
+        return spec
+    
+    def _add_interactivity_single(self, spec: dict) -> dict:
+        """为单层图表添加交互功能"""
+        existing_params = spec.get('params', [])
+        existing_names = {p.get('name') for p in existing_params if isinstance(p, dict)}
+        
+        chart_type = spec.get('mark', {}).get('type', '') if isinstance(spec.get('mark'), dict) else spec.get('mark', '')
+        
+        params = []
+        if 'select' not in existing_names:
+            params.append({"name": "select", "select": {"type": "point", "on": "click"}})
+        if 'highlight' not in existing_names:
+            params.append({"name": "highlight", "select": {"type": "point", "on": "pointerover"}})
+        
+        # 对支持的图表类型添加阈值滑块
+        if chart_type in ('bar', 'line', 'area', 'point', 'circle', 'square'):
+            if 'encoding' in spec and 'y' in spec['encoding'] and spec['encoding']['y'].get('type') == 'quantitative':
+                y_values = []
+                if 'datasets' in spec and spec.get('data', {}).get('name') in spec['datasets']:
+                    dataset = spec['datasets'][spec['data']['name']]
+                    y_field = spec['encoding']['y'].get('field')
+                    if y_field and isinstance(dataset, list):
+                        y_values = [item.get(y_field, 0) for item in dataset if y_field in item]
+                
+                if y_values and 'threshold' not in existing_names:
+                    min_val = min(y_values)
+                    max_val = max(y_values)
+                    step = (max_val - min_val) / 100 if max_val > min_val else 0.1
+                    params.append({
+                        "name": "threshold",
+                        "value": (min_val + max_val) / 2,
+                        "bind": {"input": "range", "min": min_val, "max": max_val, "step": step}
+                    })
+        
+        if not params:
+            return spec
+        
+        spec["params"] = existing_params + params
+        
+        if 'encoding' in spec and 'color' in spec['encoding']:
+            original_color = copy.deepcopy(spec['encoding']['color'])
+            if 'field' in original_color:
+                spec['encoding']['color'] = {
+                    "condition": [
+                        {"param": "select", "empty": False, "value": "orange"},
+                        {"param": "highlight", "empty": False, "value": "gold"}
+                    ],
+                    **original_color
+                }
+                
+                if any(p.get('name') == 'threshold' for p in params):
+                    spec['encoding']['opacity'] = {
+                        "condition": {
+                            "test": {
+                                "field": spec['encoding']['y'].get('field'),
+                                "gt": {"expr": "threshold"}
+                            },
+                            "value": 1
+                        },
+                        "value": 0.3
+                    }
+        
+        return spec
+
+    def _add_interactivity_to_json(self, json_spec: str) -> str:
+        """向Vega-Lite JSON规范添加交互功能
+        
+        对分层图表（layered chart）和单层图表采用不同策略：
+        - 分层图表：将选择参数添加到主数据层，避免顶层 point 选择导致重复信号
+        - 单层图表：将选择参数添加到顶层
+        """
+        try:
+            spec = json.loads(json_spec)
+            is_layered = 'layer' in spec
+            
+            if is_layered:
+                self._log("检测到分层图表，将交互参数添加到主数据层")
+                spec = self._add_interactivity_layered(spec)
+            else:
+                self._log("检测到单层图表，将交互参数添加到顶层")
+                spec = self._add_interactivity_single(spec)
+            
+            return json.dumps(spec)
+            
+        except Exception as e:
+            self._log(f"添加交互功能时出错: {str(e)}")
+            self._log(traceback.format_exc())
+            return json_spec
 
     def _execute_altair_code(self, code_string: str, output_path: str) -> dict:
         """执行Altair代码并保存图像及JSON格式
@@ -591,75 +696,102 @@ except Exception as e:
                 "info": error_msg + "\n" + stdout_capture.getvalue() + stderr_capture.getvalue()
             }
     
-    def _fix_indentation(self, code_string: str) -> str:
-        """修复代码中可能的缩进问题
+    def _exec_altair_code(self, code_string) -> dict:
+        
+        _exec_altair_code_result = self._execute_altair_code(code_string, "./test_tmp/generated_chart.png")
+        
+        # Format the return value according to the required format
+        result = _exec_altair_code_result
+        
+        return result
+    
+    def _register_code_tools(self):
+        """注册代码相关工具"""
+        # 1. 执行代码工具
+        self.register_tool(
+            tool_name="exec_altair_code",
+            tool_func=self._exec_altair_code,
+            tool_description="Execute Python code implemented with Altair library and capture output or errors",
+            tool_parameters={
+                "code_string": {
+                    "type": "string",
+                    "description": "Python code with Altair library to execute"
+                }
+            },
+            required=["code_string"]
+        )
+        
+        # 2. 获取代码示例列表工具
+        self.register_tool(
+            tool_name="get_code_example_list",
+            tool_func=self._get_code_example_list,
+            tool_description="Get a list of available chart categories and types from the example directory",
+            tool_parameters={},
+            required=[]
+        )
+        
+        # 3. 获取特定代码示例工具
+        self.register_tool(
+            tool_name="get_code_example",
+            tool_func=self._get_code_example,
+            tool_description="Get specific example code based on chart category and type",
+            tool_parameters={
+                "chart_category": {
+                    "type": "string",
+                    "description": "The category of the chart (e.g., 'Bar Charts', 'Line Charts')"
+                },
+                "chart_type": {
+                    "type": "string",
+                    "description": "The specific type of chart within the category (e.g., 'stacked_bar_chart', 'line_chart_with_confidence_interval')"
+                }
+            },
+            required=["chart_category", "chart_type"]
+        )
+             
+        self._log("代码工具注册完成")
+    
+    def __init__(self, model_type: str = "gemini-2.0-flash@gemini-2.0-flash", agent_name: str = "code_generation_agent", agent_id: str = 0, use_log: bool = False):
+        """初始化代码生成智能体
         
         Args:
-            code_string: 需要修复的代码字符串
-            
-        Returns:
-            str: 修复后的代码字符串
+            model_type: 使用的模型种类，格式为text_model@img_model，默认为gemini-2.0-flash@gemini-2.0-flash
+            agent_name: 智能体名称
+            agent_id: 智能体ID
         """
-        try:
-            # 尝试编译代码检查语法
-            compile(code_string, '<string>', 'exec')
-            return code_string  # 如果没有语法错误，直接返回原代码
-        except IndentationError:
-            self._log("检测到缩进错误，尝试修复")
-            
-            # 按行分割代码
-            lines = code_string.split('\n')
-            fixed_lines = []
-            current_indent = 0
-            indent_stack = [0]  # 用于跟踪缩进级别
-            
-            for i, line in enumerate(lines):
-                # 跳过空行
-                if not line.strip():
-                    fixed_lines.append(line)
-                    continue
-                
-                # 计算当前行的前导空格数
-                leading_spaces = len(line) - len(line.lstrip())
-                stripped_line = line.strip()
-                
-                # 检查是否是增加缩进的行（以冒号结尾）
-                if i > 0 and lines[i-1].strip().endswith(':'):
-                    # 上一行以冒号结尾，应该增加缩进
-                    current_indent = indent_stack[-1] + 4  # 增加一级缩进（4个空格）
-                    indent_stack.append(current_indent)
-                
-                # 检查是否是减少缩进的行
-                elif stripped_line.startswith(('elif', 'else:', 'except', 'finally:', 'except:')):
-                    # 回到上一级缩进
-                    if len(indent_stack) > 1:  # 确保不会弹出最初的0
-                        indent_stack.pop()
-                    current_indent = indent_stack[-1]
-                
-                # 检查是否是结束块的行
-                elif i > 0 and lines[i-1].strip() == '' and leading_spaces < current_indent:
-                    # 空行后缩进减少，可能是块结束
-                    while len(indent_stack) > 1 and leading_spaces < indent_stack[-1]:
-                        indent_stack.pop()
-                    current_indent = indent_stack[-1]
-                
-                # 应用当前缩进级别
-                fixed_line = ' ' * current_indent + stripped_line
-                fixed_lines.append(fixed_line)
-            
-            fixed_code = '\n'.join(fixed_lines)
-            self._log("缩进修复完成")
-            
-            # 再次检查修复后的代码
-            try:
-                compile(fixed_code, '<string>', 'exec')
-                return fixed_code
-            except Exception as e:
-                self._log(f"修复后的代码仍有语法错误: {e}，返回原始代码")
-                return code_string
-        except Exception as e:
-            self._log(f"修复缩进时出错: {e}，返回原始代码")
-            return code_string
+        system_prompt = """You are a professional data visualization expert specializing in Altair. Your task is to generate and modify high-quality visualization code that is executable, efficient, and visually appealing.
+
+## Core Responsibilities
+1. Generate complete, executable Altair visualization code from user queries and SQL queries
+2. Modify existing visualization code according to user queries
+3. Ensure code quality, executability, and aesthetic design
+
+## Output Requirements
+- Provide complete, executable Python scripts with all necessary imports
+- Include appropriate SQL query integration and data processing
+- Focus only on implementing explicitly requested features (avoid adding unrequested elements)
+- Do not set width and height for charts unless specifically requested
+
+## Technical Guidelines
+- Handle data transformation appropriately for visualization
+- Design interactive elements when specified
+- Apply proper visual encoding principles
+- When using exec_altair_code:
+  * Thoroughly analyze any error messages
+  * Make comprehensive corrections before retrying
+  * Never retry without significant improvements to the code
+
+## Note
+- When users provide reference images/reference code/code for iteration, you MUST generate visualization code that has similar visual components, appearance, and structure to those references. This is a strict requirement.
+- Even when users don't explicitly restate all visualization requirements, maintain visual similarity to the provided references while incorporating any new specified requirements.
+- When users don't provide reference images/reference code/code for iteration, generate entirely new visualization code based on their requirements
+"""
+
+        super().__init__(model_type=model_type, system_prompt=system_prompt, agent_name=agent_name, agent_id=agent_id, use_log=use_log)
+        
+        # 注册代码执行工具
+        self._register_code_tools()
+        
+        self._log("代码生成智能体初始化完成")
     
     def _execute_matplotlib_code(self, code_string: str, output_path: str) -> dict:
         """执行Matplotlib代码并保存图像
@@ -765,6 +897,52 @@ except Exception as e:
                 "status": "fail",
                 "info": error_msg + "\n" + stdout_capture.getvalue() + stderr_capture.getvalue()
             }
+    
+    def _img_to_img_url(self, img_path: str) -> str:
+        """将图片转换为image_url
+        
+        支持jpg、png、jpeg格式
+        
+        Args:
+            img_path: 图片文件路径
+            
+        Returns:
+            str: 图片的data URL
+            
+        Raises:
+            ValueError: 如果图片不存在或格式不支持
+        """
+        if not os.path.exists(img_path):
+            self._log(f"图片文件不存在: {img_path}")
+            raise ValueError(f"图片文件不存在: {img_path}")
+            
+        # 获取文件扩展名并确定mime type
+        ext = os.path.splitext(img_path)[1].lower()
+        mime_types = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png'
+        }
+        
+        if ext not in mime_types:
+            self._log(f"不支持的图片格式: {ext}，仅支持 {', '.join(mime_types.keys())}")
+            raise ValueError(f"不支持的图片格式: {ext}，仅支持 {', '.join(mime_types.keys())}")
+        
+        try:
+            with open(img_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                
+            # 检查编码字符串是否为空或太短
+            if not encoded_string or len(encoded_string) < 10:
+                error_msg = f"图片编码为空或太短: {img_path}, 长度: {len(encoded_string) if encoded_string else 0}"
+                self._log(error_msg)
+                raise ValueError(error_msg)
+                
+            return f"data:{mime_types[ext]};base64,{encoded_string}"
+        except Exception as e:
+            error_msg = f"读取图片文件失败: {str(e)}"
+            self._log(error_msg)
+            raise ValueError(error_msg)
 
     def generate_visualization_code(self, db_path: str, user_query: str, sql_query: str, reference_path: str = None, existing_code_path: str = None) -> Tuple[bool, str]:
         """生成全新可视化代码
@@ -983,184 +1161,6 @@ I'll start by getting the full list of chart categories and types.
             else:
                 self._log("警告：无法提取Python代码")
                 return False, {"error": "无法提取Python代码", "raw_result": result}
-
-    def _add_interactivity_to_json(self, json_spec: str) -> str:
-        """向Vega-Lite JSON规范添加交互功能
-        
-        对分层图表（layered chart）和单层图表采用不同策略：
-        - 分层图表：将选择参数添加到主数据层，避免顶层 point 选择导致重复信号
-        - 单层图表：将选择参数添加到顶层
-        """
-        try:
-            spec = json.loads(json_spec)
-            is_layered = 'layer' in spec
-            
-            if is_layered:
-                self._log("检测到分层图表，将交互参数添加到主数据层")
-                spec = self._add_interactivity_layered(spec)
-            else:
-                self._log("检测到单层图表，将交互参数添加到顶层")
-                spec = self._add_interactivity_single(spec)
-            
-            return json.dumps(spec)
-            
-        except Exception as e:
-            self._log(f"添加交互功能时出错: {str(e)}")
-            self._log(traceback.format_exc())
-            return json_spec
-    
-    def _add_interactivity_layered(self, spec: dict) -> dict:
-        """为分层图表添加交互功能，将选择参数放到主数据层中"""
-        # 找到主数据层（第一个含有数据驱动 mark 的层）
-        target_layer = None
-        for layer in spec.get('layer', []):
-            mark = layer.get('mark', {})
-            mark_type = mark.get('type', '') if isinstance(mark, dict) else mark
-            if mark_type in ('bar', 'line', 'area', 'point', 'circle', 'square', 'rect'):
-                target_layer = layer
-                break
-        
-        if target_layer is None:
-            self._log("分层图表中未找到适合添加交互的数据层，跳过")
-            return spec
-        
-        existing_params = target_layer.get('params', [])
-        existing_names = {p.get('name') for p in existing_params if isinstance(p, dict)}
-        
-        params = []
-        if 'select' not in existing_names:
-            params.append({"name": "select", "select": {"type": "point", "on": "click"}})
-        if 'highlight' not in existing_names:
-            params.append({"name": "highlight", "select": {"type": "point", "on": "pointerover"}})
-        
-        if not params:
-            return spec
-        
-        target_layer['params'] = existing_params + params
-        
-        # 为主数据层添加颜色条件（empty: false 保证默认显示原始颜色）
-        if 'encoding' in target_layer and 'color' in target_layer['encoding']:
-            original_color = copy.deepcopy(target_layer['encoding']['color'])
-            # 跳过固定值颜色（如 {"value": "black"}），只处理字段映射颜色
-            if 'field' in original_color:
-                target_layer['encoding']['color'] = {
-                    "condition": [
-                        {"param": "select", "empty": False, "value": "orange"},
-                        {"param": "highlight", "empty": False, "value": "gold"}
-                    ],
-                    **original_color
-                }
-        
-        return spec
-    
-    def _add_interactivity_single(self, spec: dict) -> dict:
-        """为单层图表添加交互功能"""
-        existing_params = spec.get('params', [])
-        existing_names = {p.get('name') for p in existing_params if isinstance(p, dict)}
-        
-        chart_type = spec.get('mark', {}).get('type', '') if isinstance(spec.get('mark'), dict) else spec.get('mark', '')
-        
-        params = []
-        if 'select' not in existing_names:
-            params.append({"name": "select", "select": {"type": "point", "on": "click"}})
-        if 'highlight' not in existing_names:
-            params.append({"name": "highlight", "select": {"type": "point", "on": "pointerover"}})
-        
-        # 对支持的图表类型添加阈值滑块
-        if chart_type in ('bar', 'line', 'area', 'point', 'circle', 'square'):
-            if 'encoding' in spec and 'y' in spec['encoding'] and spec['encoding']['y'].get('type') == 'quantitative':
-                y_values = []
-                if 'datasets' in spec and spec.get('data', {}).get('name') in spec['datasets']:
-                    dataset = spec['datasets'][spec['data']['name']]
-                    y_field = spec['encoding']['y'].get('field')
-                    if y_field and isinstance(dataset, list):
-                        y_values = [item.get(y_field, 0) for item in dataset if y_field in item]
-                
-                if y_values and 'threshold' not in existing_names:
-                    min_val = min(y_values)
-                    max_val = max(y_values)
-                    step = (max_val - min_val) / 100 if max_val > min_val else 0.1
-                    params.append({
-                        "name": "threshold",
-                        "value": (min_val + max_val) / 2,
-                        "bind": {"input": "range", "min": min_val, "max": max_val, "step": step}
-                    })
-        
-        if not params:
-            return spec
-        
-        spec["params"] = existing_params + params
-        
-        if 'encoding' in spec and 'color' in spec['encoding']:
-            original_color = copy.deepcopy(spec['encoding']['color'])
-            if 'field' in original_color:
-                spec['encoding']['color'] = {
-                    "condition": [
-                        {"param": "select", "empty": False, "value": "orange"},
-                        {"param": "highlight", "empty": False, "value": "gold"}
-                    ],
-                    **original_color
-                }
-                
-                if any(p.get('name') == 'threshold' for p in params):
-                    spec['encoding']['opacity'] = {
-                        "condition": {
-                            "test": {
-                                "field": spec['encoding']['y'].get('field'),
-                                "gt": {"expr": "threshold"}
-                            },
-                            "value": 1
-                        },
-                        "value": 0.3
-                    }
-        
-        return spec
-    
-    def _img_to_img_url(self, img_path: str) -> str:
-        """将图片转换为image_url
-        
-        支持jpg、png、jpeg格式
-        
-        Args:
-            img_path: 图片文件路径
-            
-        Returns:
-            str: 图片的data URL
-            
-        Raises:
-            ValueError: 如果图片不存在或格式不支持
-        """
-        if not os.path.exists(img_path):
-            self._log(f"图片文件不存在: {img_path}")
-            raise ValueError(f"图片文件不存在: {img_path}")
-            
-        # 获取文件扩展名并确定mime type
-        ext = os.path.splitext(img_path)[1].lower()
-        mime_types = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png'
-        }
-        
-        if ext not in mime_types:
-            self._log(f"不支持的图片格式: {ext}，仅支持 {', '.join(mime_types.keys())}")
-            raise ValueError(f"不支持的图片格式: {ext}，仅支持 {', '.join(mime_types.keys())}")
-        
-        try:
-            with open(img_path, "rb") as image_file:
-                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-                
-            # 检查编码字符串是否为空或太短
-            if not encoded_string or len(encoded_string) < 10:
-                error_msg = f"图片编码为空或太短: {img_path}, 长度: {len(encoded_string) if encoded_string else 0}"
-                self._log(error_msg)
-                raise ValueError(error_msg)
-                
-            return f"data:{mime_types[ext]};base64,{encoded_string}"
-        except Exception as e:
-            error_msg = f"读取图片文件失败: {str(e)}"
-            self._log(error_msg)
-            raise ValueError(error_msg)
 
     def modify_visualization_code(self, existing_code: str, recommendations: List[Dict] = None) -> Tuple[bool, str]:
         """根据需求修改已有代码
