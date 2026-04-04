@@ -44,4 +44,3 @@ class Config:
                 "base_url": "xxx",
             },
         }
-
