@@ -25,94 +25,6 @@ class CodeGenerationAgent(Agent):
     该智能体主要依赖LLM的代码生成能力和Altair可视化库的知识。
     """
     
-    def __init__(self, model_type: str = "qwen-max-2025-01-25@qwen-vl-max-2025-01-25", agent_name: str = "code_generation_agent", agent_id: str = 0, use_log: bool = False):
-        """初始化代码生成智能体
-        
-        Args:
-            model_type: 使用的模型种类，格式为text_model@img_model，默认为qwen-max-2025-01-25@qwen-vl-max-2025-01-25
-            agent_name: 智能体名称
-            agent_id: 智能体ID
-        """
-        system_prompt = """You are a professional data visualization expert specializing in Altair. Your task is to generate and modify high-quality visualization code that is executable, efficient, and visually appealing.
-
-## Core Responsibilities
-1. Generate complete, executable Altair visualization code from user queries and SQL queries
-2. Modify existing visualization code according to user queries
-3. Ensure code quality, executability, and aesthetic design
-
-## Output Requirements
-- Provide complete, executable Python scripts with all necessary imports
-- Include appropriate SQL query integration and data processing
-- Focus only on implementing explicitly requested features (avoid adding unrequested elements)
-- Do not set width and height for charts unless specifically requested
-
-## Technical Guidelines
-- Handle data transformation appropriately for visualization
-- Design interactive elements when specified
-- Apply proper visual encoding principles
-- When using exec_altair_code:
-  * Thoroughly analyze any error messages
-  * Make comprehensive corrections before retrying
-  * Never retry without significant improvements to the code
-
-## Note
-- When users provide reference images/reference code/code for iteration, you MUST generate visualization code that has similar visual components, appearance, and structure to those references. This is a strict requirement.
-- Even when users don't explicitly restate all visualization requirements, maintain visual similarity to the provided references while incorporating any new specified requirements.
-- When users don't provide reference images/reference code/code for iteration, generate entirely new visualization code based on their requirements
-"""
-
-        super().__init__(model_type=model_type, system_prompt=system_prompt, agent_name=agent_name, agent_id=agent_id, use_log=use_log)
-        
-        # 注册代码执行工具
-        self._register_code_tools()
-        
-        self._log("代码生成智能体初始化完成")
-    
-    def _register_code_tools(self):
-        """注册代码相关工具"""
-        # 1. 执行代码工具
-        self.register_tool(
-            tool_name="exec_altair_code",
-            tool_func=self._exec_altair_code,
-            tool_description="Execute Python code implemented with Altair library and capture output or errors",
-            tool_parameters={
-                "code_string": {
-                    "type": "string",
-                    "description": "Python code with Altair library to execute"
-                }
-            },
-            required=["code_string"]
-        )
-        
-        # 2. 获取代码示例列表工具
-        self.register_tool(
-            tool_name="get_code_example_list",
-            tool_func=self._get_code_example_list,
-            tool_description="Get a list of available chart categories and types from the example directory",
-            tool_parameters={},
-            required=[]
-        )
-        
-        # 3. 获取特定代码示例工具
-        self.register_tool(
-            tool_name="get_code_example",
-            tool_func=self._get_code_example,
-            tool_description="Get specific example code based on chart category and type",
-            tool_parameters={
-                "chart_category": {
-                    "type": "string",
-                    "description": "The category of the chart (e.g., 'Bar Charts', 'Line Charts')"
-                },
-                "chart_type": {
-                    "type": "string",
-                    "description": "The specific type of chart within the category (e.g., 'stacked_bar_chart', 'line_chart_with_confidence_interval')"
-                }
-            },
-            required=["chart_category", "chart_type"]
-        )
-             
-        self._log("代码工具注册完成")
-    
     def _get_code_example_list(self) -> dict:
         """获取代码示例列表
         
@@ -175,15 +87,6 @@ class CodeGenerationAgent(Agent):
             return {"status": "success", "data": code_content}
         except Exception as e:
             return {"status": "fail", "info": f"Error getting code example: {str(e)}"}
-    
-    def _exec_altair_code(self, code_string) -> dict:
-        
-        _exec_altair_code_result = self._execute_altair_code(code_string, "./test_tmp/test.png")
-        
-        # Format the return value according to the required format
-        result = _exec_altair_code_result
-        
-        return result
 
     def _execute_altair_code(self, code_string: str, output_path: str) -> dict:
         """执行Altair代码并保存图像
@@ -279,6 +182,103 @@ class CodeGenerationAgent(Agent):
                 "info": error_msg + "\n" + stdout_capture.getvalue() + stderr_capture.getvalue()
             }
     
+    def _exec_altair_code(self, code_string) -> dict:
+        
+        _exec_altair_code_result = self._execute_altair_code(code_string, "./test_tmp/test.png")
+        
+        # Format the return value according to the required format
+        result = _exec_altair_code_result
+        
+        return result
+    
+    def _register_code_tools(self):
+        """注册代码相关工具"""
+        # 1. 执行代码工具
+        self.register_tool(
+            tool_name="exec_altair_code",
+            tool_func=self._exec_altair_code,
+            tool_description="Execute Python code implemented with Altair library and capture output or errors",
+            tool_parameters={
+                "code_string": {
+                    "type": "string",
+                    "description": "Python code with Altair library to execute"
+                }
+            },
+            required=["code_string"]
+        )
+        
+        # 2. 获取代码示例列表工具
+        self.register_tool(
+            tool_name="get_code_example_list",
+            tool_func=self._get_code_example_list,
+            tool_description="Get a list of available chart categories and types from the example directory",
+            tool_parameters={},
+            required=[]
+        )
+        
+        # 3. 获取特定代码示例工具
+        self.register_tool(
+            tool_name="get_code_example",
+            tool_func=self._get_code_example,
+            tool_description="Get specific example code based on chart category and type",
+            tool_parameters={
+                "chart_category": {
+                    "type": "string",
+                    "description": "The category of the chart (e.g., 'Bar Charts', 'Line Charts')"
+                },
+                "chart_type": {
+                    "type": "string",
+                    "description": "The specific type of chart within the category (e.g., 'stacked_bar_chart', 'line_chart_with_confidence_interval')"
+                }
+            },
+            required=["chart_category", "chart_type"]
+        )
+             
+        self._log("代码工具注册完成")
+    
+    def __init__(self, model_type: str = "qwen-max-2025-01-25@qwen-vl-max-2025-01-25", agent_name: str = "code_generation_agent", agent_id: str = 0, use_log: bool = False):
+        """初始化代码生成智能体
+        
+        Args:
+            model_type: 使用的模型种类，格式为text_model@img_model，默认为qwen-max-2025-01-25@qwen-vl-max-2025-01-25
+            agent_name: 智能体名称
+            agent_id: 智能体ID
+        """
+        system_prompt = """You are a professional data visualization expert specializing in Altair. Your task is to generate and modify high-quality visualization code that is executable, efficient, and visually appealing.
+
+## Core Responsibilities
+1. Generate complete, executable Altair visualization code from user queries and SQL queries
+2. Modify existing visualization code according to user queries
+3. Ensure code quality, executability, and aesthetic design
+
+## Output Requirements
+- Provide complete, executable Python scripts with all necessary imports
+- Include appropriate SQL query integration and data processing
+- Focus only on implementing explicitly requested features (avoid adding unrequested elements)
+- Do not set width and height for charts unless specifically requested
+
+## Technical Guidelines
+- Handle data transformation appropriately for visualization
+- Design interactive elements when specified
+- Apply proper visual encoding principles
+- When using exec_altair_code:
+  * Thoroughly analyze any error messages
+  * Make comprehensive corrections before retrying
+  * Never retry without significant improvements to the code
+
+## Note
+- When users provide reference images/reference code/code for iteration, you MUST generate visualization code that has similar visual components, appearance, and structure to those references. This is a strict requirement.
+- Even when users don't explicitly restate all visualization requirements, maintain visual similarity to the provided references while incorporating any new specified requirements.
+- When users don't provide reference images/reference code/code for iteration, generate entirely new visualization code based on their requirements
+"""
+
+        super().__init__(model_type=model_type, system_prompt=system_prompt, agent_name=agent_name, agent_id=agent_id, use_log=use_log)
+        
+        # 注册代码执行工具
+        self._register_code_tools()
+        
+        self._log("代码生成智能体初始化完成")
+    
     def _execute_matplotlib_code(self, code_string: str, output_path: str) -> dict:
         """执行Matplotlib代码并保存图像
         
@@ -354,6 +354,52 @@ class CodeGenerationAgent(Agent):
                 "status": "fail",
                 "info": error_msg + "\n" + stdout_capture.getvalue() + stderr_capture.getvalue()
             }
+
+    def _img_to_img_url(self, img_path: str) -> str:
+        """将图片转换为image_url
+        
+        支持jpg、png、jpeg格式
+        
+        Args:
+            img_path: 图片文件路径
+            
+        Returns:
+            str: 图片的data URL
+            
+        Raises:
+            ValueError: 如果图片不存在或格式不支持
+        """
+        if not os.path.exists(img_path):
+            self._log(f"图片文件不存在: {img_path}")
+            raise ValueError(f"图片文件不存在: {img_path}")
+            
+        # 获取文件扩展名并确定mime type
+        ext = os.path.splitext(img_path)[1].lower()
+        mime_types = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png'
+        }
+        
+        if ext not in mime_types:
+            self._log(f"不支持的图片格式: {ext}，仅支持 {', '.join(mime_types.keys())}")
+            raise ValueError(f"不支持的图片格式: {ext}，仅支持 {', '.join(mime_types.keys())}")
+        
+        try:
+            with open(img_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                
+            # 检查编码字符串是否为空或太短
+            if not encoded_string or len(encoded_string) < 10:
+                error_msg = f"图片编码为空或太短: {img_path}, 长度: {len(encoded_string) if encoded_string else 0}"
+                self._log(error_msg)
+                raise ValueError(error_msg)
+                
+            return f"data:{mime_types[ext]};base64,{encoded_string}"
+        except Exception as e:
+            error_msg = f"读取图片文件失败: {str(e)}"
+            self._log(error_msg)
+            raise ValueError(error_msg)
 
     def generate_visualization_code(self, db_path: str, user_query: str, sql_query: str, reference_path: str = None, existing_code_path: str = None) -> Tuple[bool, str]:
         """生成全新可视化代码
@@ -572,52 +618,6 @@ I'll start by getting the full list of chart categories and types.
             else:
                 self._log("警告：无法提取Python代码")
                 return False, {"error": "无法提取Python代码", "raw_result": result}
-
-    def _img_to_img_url(self, img_path: str) -> str:
-        """将图片转换为image_url
-        
-        支持jpg、png、jpeg格式
-        
-        Args:
-            img_path: 图片文件路径
-            
-        Returns:
-            str: 图片的data URL
-            
-        Raises:
-            ValueError: 如果图片不存在或格式不支持
-        """
-        if not os.path.exists(img_path):
-            self._log(f"图片文件不存在: {img_path}")
-            raise ValueError(f"图片文件不存在: {img_path}")
-            
-        # 获取文件扩展名并确定mime type
-        ext = os.path.splitext(img_path)[1].lower()
-        mime_types = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png'
-        }
-        
-        if ext not in mime_types:
-            self._log(f"不支持的图片格式: {ext}，仅支持 {', '.join(mime_types.keys())}")
-            raise ValueError(f"不支持的图片格式: {ext}，仅支持 {', '.join(mime_types.keys())}")
-        
-        try:
-            with open(img_path, "rb") as image_file:
-                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-                
-            # 检查编码字符串是否为空或太短
-            if not encoded_string or len(encoded_string) < 10:
-                error_msg = f"图片编码为空或太短: {img_path}, 长度: {len(encoded_string) if encoded_string else 0}"
-                self._log(error_msg)
-                raise ValueError(error_msg)
-                
-            return f"data:{mime_types[ext]};base64,{encoded_string}"
-        except Exception as e:
-            error_msg = f"读取图片文件失败: {str(e)}"
-            self._log(error_msg)
-            raise ValueError(error_msg)
 
     def modify_visualization_code(self, existing_code: str, recommendations: List[Dict] = None) -> Tuple[bool, str]:
         """根据需求修改已有代码
