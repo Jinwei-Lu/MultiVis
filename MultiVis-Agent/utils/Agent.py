@@ -57,6 +57,25 @@ class Agent:
         # 初始化日志目录
         os.makedirs(os.path.dirname(self.log_folder), exist_ok=True)
 
+    #--------------------------------------------------------------------------
+    # Utility Methods
+    #--------------------------------------------------------------------------
+    
+    def _log(self, message: str):
+        """记录日志
+        
+        Args:
+            message: 日志消息
+        """
+        if self.use_log:
+            os.makedirs(os.path.dirname(self.log_folder), exist_ok=True)
+            if os.path.exists(self.log_folder):
+                with open(self.log_folder, "a", encoding="utf-8") as f:
+                    f.write(f"{message}\n")
+            else:
+                with open(self.log_folder, "w", encoding="utf-8") as f:
+                    f.write(f"{message}\n")
+
 
     
     #--------------------------------------------------------------------------
@@ -181,6 +200,89 @@ class Agent:
                                 {"role": "user", "content": prompt}]
                 
         return messages
+    
+    def _parse_single_tool_call(self, tool_call_text: str) -> Dict[str, Any]:
+        """解析单个工具调用
+        
+        Args:
+            tool_call_text: 包含单个工具调用的文本
+            
+        Returns:
+            Dict[str, Any]: 解析出的工具调用，如果解析失败则返回带有错误信息的工具调用
+        """
+        try:
+            tool_call_text = tool_call_text.replace("```json", "").replace("```", "").strip()
+            tool_call = demjson3.decode(tool_call_text)
+            if isinstance(tool_call, dict):
+                if "tool_name" in tool_call and "parameters" in tool_call:
+                    # 验证工具调用格式
+                    if not isinstance(tool_call["parameters"], dict):
+                        error_msg = f"Tool parameters are not a dictionary type: {tool_call['parameters']}"
+                        # 返回错误信息
+                        return {
+                            "id": f"call_error",
+                            "function": {
+                                "name": tool_call["tool_name"] + "_error",
+                                "arguments": json.dumps({
+                                    "error": error_msg,
+                                    "original_input": tool_call_text
+                                })
+                            }
+                        }
+                        
+                    # 构建一个标准格式的工具调用对象
+                    validated_tool_call = {
+                        "id": f"call",
+                        "function": {
+                            "name": tool_call["tool_name"],
+                            "arguments": json.dumps(tool_call["parameters"])
+                        }
+                    }
+                    
+                    return validated_tool_call
+                else:
+                    error_msg = f"Missing tool_name or parameters: {tool_call}"
+                    self._log(f"[解析工具调用] 跳过无效工具调用: {error_msg}")
+                    # 返回错误信息
+                    return {
+                        "id": f"call_error",
+                        "function": {
+                            "name": "invalid_tool_call",
+                            "arguments": json.dumps({
+                                "error": error_msg,
+                                "original_input": tool_call_text
+                            })
+                        }
+                    }
+            else:
+                error_msg = f"Non-dictionary tool call: {tool_call}"
+                self._log(f"[解析工具调用] 跳过非字典工具调用: {error_msg}")
+                # 返回错误信息
+                return {
+                    "id": f"call_error",
+                    "function": {
+                        "name": "invalid_tool_format",
+                        "arguments": json.dumps({
+                            "error": error_msg,
+                            "original_input": tool_call_text
+                        })
+                    }
+                }
+        except Exception as e:
+            error_msg = f"Tool call parsing error: {str(e)}"
+            self._log(f"[解析工具调用] {error_msg}")
+            self.last_error_msg = error_msg  # 记录最后一次错误信息
+            # 修改：返回包含错误信息的工具调用对象，而不是返回None
+            return {
+                "id": f"call_error_exception",
+                "function": {
+                    "name": "parse_error",
+                    "arguments": json.dumps({
+                        "error": error_msg,
+                        "original_input": tool_call_text[:100] + "..." if len(tool_call_text) > 100 else tool_call_text
+                    })
+                }
+            }
     
     def _parse_tool_calls_from_text(self, text: str) -> List[Dict[str, Any]]:
         """从文本中解析工具调用
@@ -319,89 +421,6 @@ class Agent:
         
         self._log(f"[解析工具调用] 从文本中解析出 {len(tool_calls)} 个工具调用")
         return tool_calls
-    
-    def _parse_single_tool_call(self, tool_call_text: str) -> Dict[str, Any]:
-        """解析单个工具调用
-        
-        Args:
-            tool_call_text: 包含单个工具调用的文本
-            
-        Returns:
-            Dict[str, Any]: 解析出的工具调用，如果解析失败则返回带有错误信息的工具调用
-        """
-        try:
-            tool_call_text = tool_call_text.replace("```json", "").replace("```", "").strip()
-            tool_call = demjson3.decode(tool_call_text)
-            if isinstance(tool_call, dict):
-                if "tool_name" in tool_call and "parameters" in tool_call:
-                    # 验证工具调用格式
-                    if not isinstance(tool_call["parameters"], dict):
-                        error_msg = f"Tool parameters are not a dictionary type: {tool_call['parameters']}"
-                        # 返回错误信息
-                        return {
-                            "id": f"call_error",
-                            "function": {
-                                "name": tool_call["tool_name"] + "_error",
-                                "arguments": json.dumps({
-                                    "error": error_msg,
-                                    "original_input": tool_call_text
-                                })
-                            }
-                        }
-                        
-                    # 构建一个标准格式的工具调用对象
-                    validated_tool_call = {
-                        "id": f"call",
-                        "function": {
-                            "name": tool_call["tool_name"],
-                            "arguments": json.dumps(tool_call["parameters"])
-                        }
-                    }
-                    
-                    return validated_tool_call
-                else:
-                    error_msg = f"Missing tool_name or parameters: {tool_call}"
-                    self._log(f"[解析工具调用] 跳过无效工具调用: {error_msg}")
-                    # 返回错误信息
-                    return {
-                        "id": f"call_error",
-                        "function": {
-                            "name": "invalid_tool_call",
-                            "arguments": json.dumps({
-                                "error": error_msg,
-                                "original_input": tool_call_text
-                            })
-                        }
-                    }
-            else:
-                error_msg = f"Non-dictionary tool call: {tool_call}"
-                self._log(f"[解析工具调用] 跳过非字典工具调用: {error_msg}")
-                # 返回错误信息
-                return {
-                    "id": f"call_error",
-                    "function": {
-                        "name": "invalid_tool_format",
-                        "arguments": json.dumps({
-                            "error": error_msg,
-                            "original_input": tool_call_text
-                        })
-                    }
-                }
-        except Exception as e:
-            error_msg = f"Tool call parsing error: {str(e)}"
-            self._log(f"[解析工具调用] {error_msg}")
-            self.last_error_msg = error_msg  # 记录最后一次错误信息
-            # 修改：返回包含错误信息的工具调用对象，而不是返回None
-            return {
-                "id": f"call_error_exception",
-                "function": {
-                    "name": "parse_error",
-                    "arguments": json.dumps({
-                        "error": error_msg,
-                        "original_input": tool_call_text[:100] + "..." if len(tool_call_text) > 100 else tool_call_text
-                    })
-                }
-            }
     
     def _update_conversation_history(self, prompt: str, response: str, img_urls: List[str] = None):
         """更新对话历史
@@ -558,148 +577,6 @@ class Agent:
         finally:
             # 恢复原始历史更新状态
             self.update_history = original_update_status
-
-    def chat_ReAct(self, question: str = None, img_urls: List[str] = None, user_messages: List[Dict[str, Any]] = None, **kwargs) -> Tuple[str, bool]:
-        """
-        让Agent采用ReAct模式进行对话，支持并行工具调用
-        
-        Args:
-            question: 用户输入的问题
-            img_urls: 图片URL列表
-            reasoning: 是否使用推理模式
-            use_history: 是否使用对话历史
-            **kwargs: 传递给模型的其他参数
-            
-        Returns:
-            Tuple[str, bool]: (模型回复, 是否使用了工具)
-        """
-        if not question and not user_messages:
-            raise ValueError("问题或消息不能同时为空")
-        if user_messages and img_urls:
-            raise ValueError("当提供user_messages时，img_urls必须为空")
-
-        try:
-            # 记录会话开始信息
-            self._log("\n" + "="*80)
-            self._log("REACT模式对话会话开始")
-            self._log("="*80)
-            
-            # 记录基本参数信息
-            self._log("\n[会话参数]")
-            self._log(f"问题: {question}")
-            self._log(f"额外参数: {kwargs}")
-            
-            # 获取工具信息
-            tools = self.tool_manager.get_tools()
-            tool_functions = self.tool_manager.get_tool_functions()
-            
-            # 记录可用工具信息
-            self._log("\n[可用工具]")
-            available_tools = list(tool_functions.keys())
-            tool_names_str = ", ".join(available_tools) if available_tools else "无可用工具"
-            self._log(f"工具列表: {tool_names_str}")
-            self._log(f"工具数量: {len(available_tools)}")
-                
-            # 构建ReAct系统提示词
-            react_system_prompt = self._build_react_system_prompt()
-            self._log("\n[ReAct System Prompt]")
-            self._log(react_system_prompt)
-            
-            # 确定使用的模型
-            selected_client = self.img_client if img_urls else self.text_client
-            selected_model = self.img_model if img_urls else self.text_model
-
-            if not user_messages:
-                # 初始问题
-                prompt = f"""<Question>
-{question}
-</Question>
-"""
-
-                # 构建消息 - 只有系统提示和用户初始问题
-                if img_urls:
-                    messages = [
-                        {"role": "system", "content": react_system_prompt},
-                        {"role": "user", "content": [{"type": "text", "text": prompt}]}
-                    ]
-                    for img_url in img_urls:
-                        messages[1]["content"].append({"type": "image_url", "image_url": {"url": img_url}})
-                else:
-                    messages = [
-                        {"role": "system", "content": react_system_prompt},
-                        {"role": "user", "content": prompt}
-                    ]
-            else:
-                messages = [{"role": "system", "content": react_system_prompt}] + user_messages
-                for message in user_messages:
-                    if isinstance(message['content'], str):
-                        if message['role'] == 'user':
-                            self._log(f"[发送到模型的消息]:\n{message['content']}\n")
-                        else:
-                            self._log(f"[模型响应]:\n{message['content']}\n")
-                    if isinstance(message['content'], list):
-                        if message['role'] == 'user':
-                            for item in message['content']:
-                                if item['type'] == 'image_url':
-                                    selected_client = self.img_client
-                                    selected_model = self.img_model
-                                else:
-                                    self._log(f"[发送到模型的消息]:\n{item['text']}\n")
-                        else:
-                            self._log(f"[模型响应]:\n{message['content']}\n")
-                                
-
-            
-            self._log("\n[模型配置]")
-            self._log(f"使用模型: {selected_model}")
-            
-            # ReAct对话迭代
-            max_iterations = kwargs.pop("max_iterations", 8)
-            final_answer, used_tool = self._run_react_iterations(
-                messages=messages,
-                client=selected_client,
-                model=selected_model,
-                tools=tools,
-                tool_functions=tool_functions,
-                max_iterations=max_iterations,
-                **kwargs
-            )
-            
-            # 更新对话历史
-            if self.update_history:
-                self._update_conversation_history(question, final_answer, img_urls)
-            
-            return final_answer, used_tool
-            
-        except Exception as e:
-            error_msg = f"Error in ReAct chat: {str(e)}"
-            self._log(f"\n[会话异常结束] {error_msg}")
-            self._log("="*80 + "\n")
-            return error_msg, False
-    
-    def _format_conversation_history(self) -> str:
-        """将对话历史格式化为文本
-        
-        Returns:
-            str: 格式化后的对话历史
-        """
-        conversation = ""
-        for message in self.history:
-            if message['role'] == "system":
-                continue
-                
-            if isinstance(message['content'], str):
-                conversation += f"{message['role'].upper()}: {message['content']}\n"
-            elif isinstance(message["content"], list):
-                conversation += f"{message['role'].upper()}: "
-                for content in message['content']:
-                    if content['type'] == "text":
-                        conversation += f"{content['text']} "
-                    elif content['type'] == "image_url":
-                        conversation += f"[IMG_URL] "
-                conversation += "\n"
-                
-        return conversation
     
     def _build_react_system_prompt(self) -> str:
         """构建ReAct模式的系统提示词
@@ -1089,6 +966,148 @@ Rethink the next steps
         
         return final_answer, used_tool
 
+    def chat_ReAct(self, question: str = None, img_urls: List[str] = None, user_messages: List[Dict[str, Any]] = None, **kwargs) -> Tuple[str, bool]:
+        """
+        让Agent采用ReAct模式进行对话，支持并行工具调用
+        
+        Args:
+            question: 用户输入的问题
+            img_urls: 图片URL列表
+            reasoning: 是否使用推理模式
+            use_history: 是否使用对话历史
+            **kwargs: 传递给模型的其他参数
+            
+        Returns:
+            Tuple[str, bool]: (模型回复, 是否使用了工具)
+        """
+        if not question and not user_messages:
+            raise ValueError("问题或消息不能同时为空")
+        if user_messages and img_urls:
+            raise ValueError("当提供user_messages时，img_urls必须为空")
+
+        try:
+            # 记录会话开始信息
+            self._log("\n" + "="*80)
+            self._log("REACT模式对话会话开始")
+            self._log("="*80)
+            
+            # 记录基本参数信息
+            self._log("\n[会话参数]")
+            self._log(f"问题: {question}")
+            self._log(f"额外参数: {kwargs}")
+            
+            # 获取工具信息
+            tools = self.tool_manager.get_tools()
+            tool_functions = self.tool_manager.get_tool_functions()
+            
+            # 记录可用工具信息
+            self._log("\n[可用工具]")
+            available_tools = list(tool_functions.keys())
+            tool_names_str = ", ".join(available_tools) if available_tools else "无可用工具"
+            self._log(f"工具列表: {tool_names_str}")
+            self._log(f"工具数量: {len(available_tools)}")
+                
+            # 构建ReAct系统提示词
+            react_system_prompt = self._build_react_system_prompt()
+            self._log("\n[ReAct System Prompt]")
+            self._log(react_system_prompt)
+            
+            # 确定使用的模型
+            selected_client = self.img_client if img_urls else self.text_client
+            selected_model = self.img_model if img_urls else self.text_model
+
+            if not user_messages:
+                # 初始问题
+                prompt = f"""<Question>
+{question}
+</Question>
+"""
+
+                # 构建消息 - 只有系统提示和用户初始问题
+                if img_urls:
+                    messages = [
+                        {"role": "system", "content": react_system_prompt},
+                        {"role": "user", "content": [{"type": "text", "text": prompt}]}
+                    ]
+                    for img_url in img_urls:
+                        messages[1]["content"].append({"type": "image_url", "image_url": {"url": img_url}})
+                else:
+                    messages = [
+                        {"role": "system", "content": react_system_prompt},
+                        {"role": "user", "content": prompt}
+                    ]
+            else:
+                messages = [{"role": "system", "content": react_system_prompt}] + user_messages
+                for message in user_messages:
+                    if isinstance(message['content'], str):
+                        if message['role'] == 'user':
+                            self._log(f"[发送到模型的消息]:\n{message['content']}\n")
+                        else:
+                            self._log(f"[模型响应]:\n{message['content']}\n")
+                    if isinstance(message['content'], list):
+                        if message['role'] == 'user':
+                            for item in message['content']:
+                                if item['type'] == 'image_url':
+                                    selected_client = self.img_client
+                                    selected_model = self.img_model
+                                else:
+                                    self._log(f"[发送到模型的消息]:\n{item['text']}\n")
+                        else:
+                            self._log(f"[模型响应]:\n{message['content']}\n")
+                                
+
+            
+            self._log("\n[模型配置]")
+            self._log(f"使用模型: {selected_model}")
+            
+            # ReAct对话迭代
+            max_iterations = kwargs.pop("max_iterations", 8)
+            final_answer, used_tool = self._run_react_iterations(
+                messages=messages,
+                client=selected_client,
+                model=selected_model,
+                tools=tools,
+                tool_functions=tool_functions,
+                max_iterations=max_iterations,
+                **kwargs
+            )
+            
+            # 更新对话历史
+            if self.update_history:
+                self._update_conversation_history(question, final_answer, img_urls)
+            
+            return final_answer, used_tool
+            
+        except Exception as e:
+            error_msg = f"Error in ReAct chat: {str(e)}"
+            self._log(f"\n[会话异常结束] {error_msg}")
+            self._log("="*80 + "\n")
+            return error_msg, False
+    
+    def _format_conversation_history(self) -> str:
+        """将对话历史格式化为文本
+        
+        Returns:
+            str: 格式化后的对话历史
+        """
+        conversation = ""
+        for message in self.history:
+            if message['role'] == "system":
+                continue
+                
+            if isinstance(message['content'], str):
+                conversation += f"{message['role'].upper()}: {message['content']}\n"
+            elif isinstance(message["content"], list):
+                conversation += f"{message['role'].upper()}: "
+                for content in message['content']:
+                    if content['type'] == "text":
+                        conversation += f"{content['text']} "
+                    elif content['type'] == "image_url":
+                        conversation += f"[IMG_URL] "
+                conversation += "\n"
+                
+        return conversation
+
     #--------------------------------------------------------------------------
     # History Management Methods
     #--------------------------------------------------------------------------
@@ -1115,25 +1134,6 @@ Rethink the next steps
         system_prompt = self.system_prompt
         self.history = [{"role": "system", "content": system_prompt}]
         self._log("已清空对话历史")
-
-    #--------------------------------------------------------------------------
-    # Utility Methods
-    #--------------------------------------------------------------------------
-    
-    def _log(self, message: str):
-        """记录日志
-        
-        Args:
-            message: 日志消息
-        """
-        if self.use_log:
-            os.makedirs(os.path.dirname(self.log_folder), exist_ok=True)
-            if os.path.exists(self.log_folder):
-                with open(self.log_folder, "a", encoding="utf-8") as f:
-                    f.write(f"{message}\n")
-            else:
-                with open(self.log_folder, "w", encoding="utf-8") as f:
-                    f.write(f"{message}\n")
 
 
 if __name__ == "__main__":    
