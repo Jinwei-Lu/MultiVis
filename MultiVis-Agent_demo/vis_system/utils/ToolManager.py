@@ -169,4 +169,3 @@ if __name__ == "__main__":
     print("\n测试获取工具描述:")
     description = manager.get_tool_description()
     print(f"工具描述: {description}")
-
