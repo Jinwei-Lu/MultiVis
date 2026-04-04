@@ -25,136 +25,6 @@ class DatabaseQueryAgent(Agent):
     该智能体主要依赖LLM的结构化理解能力和SQL生成能力。
     """
     
-    def __init__(self, model_type: str = "qwen-max-2025-01-25@qwen-vl-max-2025-01-25", agent_name: str = "database_query_agent", agent_id: str = 0, use_log: bool = False):
-        """初始化数据库与查询智能体
-        
-        Args:
-            model_type: 使用的模型种类，格式为text_model@img_model，默认为qwen-max-2025-01-25@qwen-vl-max-2025-01-25
-            agent_name: 智能体名称
-            agent_id: 智能体ID
-        """
-        system_prompt = """You are a database analyst specializing in retrieving data specifically for downstream data visualization tasks, primarily using the Altair library. Your goal is to generate efficient SQL queries that fetch the precise data structure needed for creating effective visualizations based on user requests and optional visual/code references.
-
-## Core Responsibilities
-- Analyze user queries, database schemas, and references (images/code) to understand visualization needs.
-- Generate SQL queries that retrieve the necessary data structure for the intended visualization (consider groupings, aggregations, essential columns for axes, color, tooltips, etc.).
-- SELECT specific columns relevant to the visualization task, but include potentially useful columns (e.g., for tooltips) if implied.
-- Optimize queries for efficiency while ensuring data suitability for visualization.
-- Avoid 'SELECT *' and unnecessary data retrieval.
-
-## Key Principles
-- Prioritize fetching data in a format readily usable by Altair.
-- Infer data requirements (grouping, aggregation, fields) from visual references (images) when provided.
-- Analyze data handling in reference code to inform the structure of the new SQL query.
-- Join tables only when necessary to retrieve required fields.
-- Apply filtering and sorting as needed for the visualization context.
-"""
-
-        super().__init__(model_type=model_type, system_prompt=system_prompt, agent_name=agent_name, agent_id=agent_id, use_log=use_log)
-        
-        # 注册数据库工具
-        self._register_db_tools()
-        
-        self._log("数据库与查询智能体初始化完成")
-    
-    def _register_db_tools(self):
-        """注册数据库相关工具"""
-        # 1. 列出数据库表
-        self.register_tool(
-            tool_name="list_tables",
-            tool_func=self._list_tables_tool,
-            tool_description="Get a list of all table names in the database",
-            tool_parameters={
-                "db_path": {
-                    "type": "string",
-                    "description": "Database file path"
-                }
-            },
-            required=["db_path"]
-        )
-        
-        # 2. 获取指定表的结构和示例数据
-        self.register_tool(
-            tool_name="get_table",
-            tool_func=self._get_table_tool,
-            tool_description="Get structure information and sample data for one or more tables",
-            tool_parameters={
-                "db_path": {
-                    "type": "string",
-                    "description": "Database file path"
-                },
-                "table_names": {
-                    "type": "array",
-                    "description": "List of table names"
-                },
-                "sample_size": {
-                    "type": "integer",
-                    "description": "Number of sample rows to return from each table (maximum is 5)"
-                }
-            },
-            required=["db_path", "table_names"]
-        )
-        
-        # 3. 获取表之间的关系
-        self.register_tool(
-            tool_name="get_foreign_keys",
-            tool_func=self._get_foreign_keys_tool,
-            tool_description="Get foreign key relationships between tables",
-            tool_parameters={
-                "db_path": {
-                    "type": "string",
-                    "description": "Database file path"
-                },
-                "table_names": {
-                    "type": "array",
-                    "description": "List of table names (optional, if provided only returns foreign key relationships for those tables)"
-                }
-            },
-            required=["db_path"]
-        )
-        
-        # 4. 执行SQL查询
-        self.register_tool(
-            tool_name="execute_sql",
-            tool_func=self._execute_sql_tool,
-            tool_description="Execute SQL query and get results",
-            tool_parameters={
-                "db_path": {
-                    "type": "string",
-                    "description": "Database file path"
-                },
-                "sql_query": {
-                    "type": "string",
-                    "description": "SQL query to execute"
-                },
-                "max_rows": {
-                    "type": "integer",
-                    "description": "Maximum number of rows to return (maximum is 20)"
-                }
-            },
-            required=["db_path", "sql_query"]
-        )
-        
-        # 5. 查找字段所在的表
-        self.register_tool(
-            tool_name="find_fields_in_tables",
-            tool_func=self._find_fields_in_tables_tool,
-            tool_description="Find tables containing specified field names",
-            tool_parameters={
-                "db_path": {
-                    "type": "string",
-                    "description": "Database file path"
-                },
-                "field_names": {
-                    "type": "array",
-                    "description": "List of field names to find in tables"
-                }
-            },
-            required=["db_path", "field_names"]
-        )
-        
-        self._log("数据库工具注册完成")
-    
     def _list_tables_tool(self, db_path: str) -> str:
         """获取数据库中的所有表名
         
@@ -505,6 +375,136 @@ class DatabaseQueryAgent(Agent):
             self._log(error_msg)
             return f"Error: Failed to find fields in tables: {str(e)}"
     
+    def _register_db_tools(self):
+        """注册数据库相关工具"""
+        # 1. 列出数据库表
+        self.register_tool(
+            tool_name="list_tables",
+            tool_func=self._list_tables_tool,
+            tool_description="Get a list of all table names in the database",
+            tool_parameters={
+                "db_path": {
+                    "type": "string",
+                    "description": "Database file path"
+                }
+            },
+            required=["db_path"]
+        )
+        
+        # 2. 获取指定表的结构和示例数据
+        self.register_tool(
+            tool_name="get_table",
+            tool_func=self._get_table_tool,
+            tool_description="Get structure information and sample data for one or more tables",
+            tool_parameters={
+                "db_path": {
+                    "type": "string",
+                    "description": "Database file path"
+                },
+                "table_names": {
+                    "type": "array",
+                    "description": "List of table names"
+                },
+                "sample_size": {
+                    "type": "integer",
+                    "description": "Number of sample rows to return from each table (maximum is 5)"
+                }
+            },
+            required=["db_path", "table_names"]
+        )
+        
+        # 3. 获取表之间的关系
+        self.register_tool(
+            tool_name="get_foreign_keys",
+            tool_func=self._get_foreign_keys_tool,
+            tool_description="Get foreign key relationships between tables",
+            tool_parameters={
+                "db_path": {
+                    "type": "string",
+                    "description": "Database file path"
+                },
+                "table_names": {
+                    "type": "array",
+                    "description": "List of table names (optional, if provided only returns foreign key relationships for those tables)"
+                }
+            },
+            required=["db_path"]
+        )
+        
+        # 4. 执行SQL查询
+        self.register_tool(
+            tool_name="execute_sql",
+            tool_func=self._execute_sql_tool,
+            tool_description="Execute SQL query and get results",
+            tool_parameters={
+                "db_path": {
+                    "type": "string",
+                    "description": "Database file path"
+                },
+                "sql_query": {
+                    "type": "string",
+                    "description": "SQL query to execute"
+                },
+                "max_rows": {
+                    "type": "integer",
+                    "description": "Maximum number of rows to return (maximum is 20)"
+                }
+            },
+            required=["db_path", "sql_query"]
+        )
+        
+        # 5. 查找字段所在的表
+        self.register_tool(
+            tool_name="find_fields_in_tables",
+            tool_func=self._find_fields_in_tables_tool,
+            tool_description="Find tables containing specified field names",
+            tool_parameters={
+                "db_path": {
+                    "type": "string",
+                    "description": "Database file path"
+                },
+                "field_names": {
+                    "type": "array",
+                    "description": "List of field names to find in tables"
+                }
+            },
+            required=["db_path", "field_names"]
+        )
+        
+        self._log("数据库工具注册完成")
+    
+    def __init__(self, model_type: str = "qwen-max-2025-01-25@qwen-vl-max-2025-01-25", agent_name: str = "database_query_agent", agent_id: str = 0, use_log: bool = False):
+        """初始化数据库与查询智能体
+        
+        Args:
+            model_type: 使用的模型种类，格式为text_model@img_model，默认为qwen-max-2025-01-25@qwen-vl-max-2025-01-25
+            agent_name: 智能体名称
+            agent_id: 智能体ID
+        """
+        system_prompt = """You are a database analyst specializing in retrieving data specifically for downstream data visualization tasks, primarily using the Altair library. Your goal is to generate efficient SQL queries that fetch the precise data structure needed for creating effective visualizations based on user requests and optional visual/code references.
+
+## Core Responsibilities
+- Analyze user queries, database schemas, and references (images/code) to understand visualization needs.
+- Generate SQL queries that retrieve the necessary data structure for the intended visualization (consider groupings, aggregations, essential columns for axes, color, tooltips, etc.).
+- SELECT specific columns relevant to the visualization task, but include potentially useful columns (e.g., for tooltips) if implied.
+- Optimize queries for efficiency while ensuring data suitability for visualization.
+- Avoid 'SELECT *' and unnecessary data retrieval.
+
+## Key Principles
+- Prioritize fetching data in a format readily usable by Altair.
+- Infer data requirements (grouping, aggregation, fields) from visual references (images) when provided.
+- Analyze data handling in reference code to inform the structure of the new SQL query.
+- Join tables only when necessary to retrieve required fields.
+- Apply filtering and sorting as needed for the visualization context.
+"""
+
+        super().__init__(model_type=model_type, system_prompt=system_prompt, agent_name=agent_name, agent_id=agent_id, use_log=use_log)
+        
+        # 注册数据库工具
+        self._register_db_tools()
+        
+        self._log("数据库与查询智能体初始化完成")
+    
     def _img_to_img_url(self, img_path: str) -> str:
         """将图片转换为image_url
         
@@ -646,6 +646,45 @@ class DatabaseQueryAgent(Agent):
             plt.close('all') # Ensure cleanup on error
             error_msg = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
             return {"status": "fail", "info": f"Failed to execute Matplotlib code: {error_msg}"}
+            
+    def _extract_sql_from_result(self, result: str) -> str:
+        """从结果中提取SQL查询语句
+        
+        Args:
+            result: LLM生成的结果文本
+            
+        Returns:
+            str: 提取的SQL查询语句，如果没有找到则返回None
+        """
+        # 按优先级尝试不同的提取方法
+        
+        # 1. 先尝试从Final_Answer标签中提取
+        final_pattern = r'<Final_Answer>\s*```(?:sql)?\s*([\s\S]*?)\s*```\s*</Final_Answer>'
+        final_match = re.search(final_pattern, result, re.DOTALL | re.IGNORECASE)
+        if final_match:
+            sql_query = final_match.group(1).strip()
+            self._log("成功从Final_Answer标签中提取SQL查询")
+            return sql_query
+            
+        # 2. 如果没有找到标签，尝试从普通SQL代码块中提取
+        sql_pattern = r'```(?:sql)?\s*([\s\S]*?)\s*```'
+        sql_match = re.search(sql_pattern, result, re.DOTALL | re.IGNORECASE)
+        if sql_match:
+            sql_query = sql_match.group(1).strip()
+            self._log("成功从代码块中提取SQL查询")
+            return sql_query
+            
+        # 3. 如果还是没有找到，尝试直接使用正则查找SQL语句
+        # 只匹配以SELECT开头的语句，不要求结尾有分号
+        select_pattern = r'(SELECT[\s\S]*?)(;|$)'
+        select_match = re.search(select_pattern, result, re.DOTALL | re.IGNORECASE)
+        if select_match:
+            sql_query = select_match.group(1).strip()
+            self._log("使用正则表达式提取SQL查询")
+            return sql_query
+            
+        # 如果所有方法都失败，返回None
+        return None
 
     def generate_sql_from_query(self, db_path: str, user_query: str, reference_path: str = None, existing_code_path: str = None) -> Tuple[bool, str]:
         """根据用户查询直接生成SQL查询语句，内部自动处理schema linking的生成和验证
@@ -879,45 +918,6 @@ Let me start by exploring the database schema to understand available tables.
             Tuple[bool, str]: 状态（成功/失败）和SQL查询语句
         """
         return self.generate_sql_from_query(db_path, requirement, reference_path, existing_code_path)
-            
-    def _extract_sql_from_result(self, result: str) -> str:
-        """从结果中提取SQL查询语句
-        
-        Args:
-            result: LLM生成的结果文本
-            
-        Returns:
-            str: 提取的SQL查询语句，如果没有找到则返回None
-        """
-        # 按优先级尝试不同的提取方法
-        
-        # 1. 先尝试从Final_Answer标签中提取
-        final_pattern = r'<Final_Answer>\s*```(?:sql)?\s*([\s\S]*?)\s*```\s*</Final_Answer>'
-        final_match = re.search(final_pattern, result, re.DOTALL | re.IGNORECASE)
-        if final_match:
-            sql_query = final_match.group(1).strip()
-            self._log("成功从Final_Answer标签中提取SQL查询")
-            return sql_query
-            
-        # 2. 如果没有找到标签，尝试从普通SQL代码块中提取
-        sql_pattern = r'```(?:sql)?\s*([\s\S]*?)\s*```'
-        sql_match = re.search(sql_pattern, result, re.DOTALL | re.IGNORECASE)
-        if sql_match:
-            sql_query = sql_match.group(1).strip()
-            self._log("成功从代码块中提取SQL查询")
-            return sql_query
-            
-        # 3. 如果还是没有找到，尝试直接使用正则查找SQL语句
-        # 只匹配以SELECT开头的语句，不要求结尾有分号
-        select_pattern = r'(SELECT[\s\S]*?)(;|$)'
-        select_match = re.search(select_pattern, result, re.DOTALL | re.IGNORECASE)
-        if select_match:
-            sql_query = select_match.group(1).strip()
-            self._log("使用正则表达式提取SQL查询")
-            return sql_query
-            
-        # 如果所有方法都失败，返回None
-        return None
 
     def execute_query(self, db_path: str, sql_query: str) -> Tuple[bool, Dict]:
         """执行SQL查询并返回结果
