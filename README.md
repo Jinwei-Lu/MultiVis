@@ -10,7 +10,7 @@ MultiVis-Agent is a multi-agent framework with explicit logic rules for **reliab
 - **SIGMOD 2026 (Demonstration Track)**: *Demonstration of MultiVis-Agent: Interactively Generating Reliable Visualizations via Logic-Rule Agents*
 
 ## Demonstration
-https://github.com/user-attachments/assets/9f27ceab-fde1-417a-bf1a-fc88bf8c8881
+https://github.com/user-attachments/assets/c71b991e-6077-4a3d-ae2c-8fe7b9e142f3
 
 ## Repository Overview
 
