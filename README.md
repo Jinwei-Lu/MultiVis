@@ -83,17 +83,23 @@ MultiVis-Bench provides benchmark files:
 If you find this project useful in your research, please cite:
 
 ```bibtex
-@article{lu2026multivis,
-  author    = {Lu, Jinwei and Song, Yuanfeng and Zhang, Chen and Wong, Raymond Chi-Wing},
-  title     = {MultiVis-Agent: A Multi-Agent Framework with Logic Rules for Reliable and Comprehensive Cross-Modal Data Visualization},
-  journal   = {Proc. ACM Manag. Data},
-  volume    = {4},
-  number    = {1},
-  articleno = {56},
-  year      = {2026},
-  month     = {feb},
-  publisher = {ACM},
-  doi       = {10.1145/3786670}
+@article{10.1145/3786670,
+author = {Lu, Jinwei and Song, Yuanfeng and Zhang, Chen and Wong, Raymond Chi-Wing},
+title = {MultiVis-Agent: A Multi-Agent Framework with Logic Rules for Reliable and Comprehensive Cross-Modal Data Visualization},
+year = {2026},
+issue_date = {February 2026},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+volume = {4},
+number = {1},
+url = {https://doi.org/10.1145/3786670},
+doi = {10.1145/3786670},
+abstract = {Real-world visualization tasks involve complex, multi-modal requirements that extend beyond simple text-to-chart generation, requiring reference images, code examples, and iterative refinement. Current systems exhibit fundamental limitations: single-modality input, one-shot generation, and rigid workflows. While LLM-based approaches show potential for these complex requirements, they introduce reliability challenges including catastrophic failures and infinite loop susceptibility. To address this gap, we propose MultiVis-Agent, a logic rule-enhanced multi-agent framework for reliable multi-modal and multi-scenario visualization generation. Our approach introduces a four-layer logic rule framework that provides mathematical guarantees for system reliability while maintaining flexibility. Unlike traditional rule-based systems, our logic rules are mathematical constraints that guide LLM reasoning rather than replacing it. We formalize the MultiVis task spanning four scenarios from basic generation to iterative refinement, and develop MultiVis-Bench, a benchmark with over 1,000 cases for multi-modal visualization evaluation. Extensive experiments demonstrate that our approach achieves 75.63\% visualization score on challenging tasks, significantly outperforming baselines (57.54-62.79\%), with task completion rates of 99.58\% and code execution success rates of 94.56\% (vs. 74.48\% and 65.10\% without logic rules), successfully addressing both complexity and reliability challenges in automated visualization generation.},
+journal = {Proc. ACM Manag. Data},
+month = apr,
+articleno = {56},
+numpages = {25},
+keywords = {multi-agent framework, natural language to sql, data visualization, database applications, automated code generation}
 }
 
 @inproceedings{lu2026demonstration,
