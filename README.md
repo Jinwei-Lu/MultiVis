@@ -1,6 +1,7 @@
 ## MultiVis-Agent: A Multi-Agent Framework with Logic Rules for Reliable and Comprehensive Cross-Modal Data Visualization
 
 [![arXiv](https://img.shields.io/badge/arXiv-2601.18320-b31b1b.svg)](https://arxiv.org/abs/2601.18320)
+[![Published](https://img.shields.io/badge/Published-ACM%20SIGMOD%202026-success.svg)](https://dl.acm.org/doi/abs/10.1145/3786670)
 
 MultiVis-Agent is a multi-agent framework with explicit logic rules for **reliable, comprehensive cross-modal data visualization**, supporting inputs such as natural language, code, and images. This repository contains both the research artifact for the SIGMOD 2026 paper and the interactive demo artifact presented at SIGMOD 2026 Demo. It also provides a **web-based demonstration** and **video presentation** of MultiVis-Agent, **MultiVis-Bench**, a benchmark for text-to-vis and visualization modification tasks, and an automatic **metric suite** for visualization quality.
 
