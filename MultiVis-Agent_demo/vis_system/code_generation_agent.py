@@ -17,20 +17,20 @@ from .utils.Agent import Agent
 
 class CodeGenerationAgent(Agent):
     """代码生成智能体（Code Generation Agent）
-    
+
     负责基于SQL查询结果和用户查询生成Altair可视化代码或修改已有代码。
     提供两个主要接口：
     1. generate_visualization_code: 生成全新可视化代码
     2. modify_visualization_code: 根据用户查询修改已有代码
-    
+
     该智能体主要依赖LLM的代码生成能力和Altair可视化库的知识。
     """
-    
-    def __init__(self, model_type: str = "gemini-2.0-flash@gemini-2.0-flash", agent_name: str = "code_generation_agent", agent_id: str = 0, use_log: bool = False):
+
+    def __init__(self, model_type: str = "gemini-3-flash-preview@gemini-3-flash-preview", agent_name: str = "code_generation_agent", agent_id: str = 0, use_log: bool = False):
         """初始化代码生成智能体
-        
+
         Args:
-            model_type: 使用的模型种类，格式为text_model@img_model，默认为gemini-2.0-flash@gemini-2.0-flash
+            model_type: 使用的模型种类，格式为text_model@img_model，默认为gemini-3-flash-preview@gemini-3-flash-preview
             agent_name: 智能体名称
             agent_id: 智能体ID
         """
@@ -63,12 +63,12 @@ class CodeGenerationAgent(Agent):
 """
 
         super().__init__(model_type=model_type, system_prompt=system_prompt, agent_name=agent_name, agent_id=agent_id, use_log=use_log)
-        
+
         # 注册代码执行工具
         self._register_code_tools()
-        
+
         self._log("代码生成智能体初始化完成")
-    
+
     def _register_code_tools(self):
         """注册代码相关工具"""
         # 1. 执行代码工具
@@ -84,7 +84,7 @@ class CodeGenerationAgent(Agent):
             },
             required=["code_string"]
         )
-        
+
         # 2. 获取代码示例列表工具
         self.register_tool(
             tool_name="get_code_example_list",
@@ -93,7 +93,7 @@ class CodeGenerationAgent(Agent):
             tool_parameters={},
             required=[]
         )
-        
+
         # 3. 获取特定代码示例工具
         self.register_tool(
             tool_name="get_code_example",
@@ -111,100 +111,123 @@ class CodeGenerationAgent(Agent):
             },
             required=["chart_category", "chart_type"]
         )
-             
+
         self._log("代码工具注册完成")
-    
+
     def _get_code_example_list(self) -> dict:
         """获取代码示例列表
-        
+
         从./chart_example目录中获取所有图表类别和类型的列表
-        
+
         Returns:
             dict: 包含图表类别和类型的字典
         """
         result = {}
         example_dir = "./chart_example"
-        
+
         try:
             # 检查目录是否存在
             if not os.path.exists(example_dir) or not os.path.isdir(example_dir):
                 return {"status": "fail", "info": f"Example directory {example_dir} not found"}
-            
+
             # 获取所有类别（子目录）
             categories = [d for d in os.listdir(example_dir) if os.path.isdir(os.path.join(example_dir, d))]
-            
+
             # 对于每个类别，获取所有类型（文件）
             for category in categories:
                 category_path = os.path.join(example_dir, category)
                 # 获取该类别下的所有Python文件
                 chart_types = [
-                    f.replace('.py', '') for f in os.listdir(category_path) 
+                    f.replace('.py', '') for f in os.listdir(category_path)
                     if os.path.isfile(os.path.join(category_path, f)) and f.endswith('.py')
                 ]
                 result[category] = chart_types
-            
+
             return {"status": "success", "data": result}
         except Exception as e:
             return {"status": "fail", "info": f"Error getting code example list: {str(e)}"}
-    
+
     def _get_code_example(self, chart_category: str, chart_type: str) -> dict:
         """获取特定代码示例
-        
+
         根据图表类别和类型获取特定的代码示例
-        
+
         Args:
             chart_category: 图表类别（例如"Bar Charts"）
             chart_type: 图表类型（例如"stacked_bar_chart"）
-            
+
         Returns:
             dict: 包含代码示例的字典
         """
         example_dir = "./chart_example"
-        
+
         try:
             # 构建文件路径
             file_path = os.path.join(example_dir, chart_category, f"{chart_type}.py")
-            
+
             # 检查文件是否存在
             if not os.path.exists(file_path) or not os.path.isfile(file_path):
                 return {"status": "fail", "info": f"Example file not found: {file_path}"}
-            
+
             # 读取文件内容
             with open(file_path, 'r', encoding='utf-8') as f:
                 code_content = f.read()
-            
+
             return {"status": "success", "data": code_content}
         except Exception as e:
             return {"status": "fail", "info": f"Error getting code example: {str(e)}"}
-    
+
     def _exec_altair_code(self, code_string) -> dict:
-        
+
         _exec_altair_code_result = self._execute_altair_code(code_string, "./test_tmp/generated_chart.png")
-        
+
         # Format the return value according to the required format
         result = _exec_altair_code_result
-        
+
         return result
+
+    def _normalize_sqlite_paths(self, code_string: str) -> str:
+        """Resolve packaged demo database basenames to ./database/*.sqlite."""
+        database_dir = "database"
+        if not os.path.isdir(database_dir):
+            return code_string
+
+        def replace_connect(match: re.Match) -> str:
+            quote, db_path, suffix = match.groups()
+            if os.path.isabs(db_path) or "/" in db_path or "\\" in db_path:
+                return match.group(0)
+
+            candidate = os.path.join(database_dir, os.path.basename(db_path))
+            if not os.path.exists(candidate):
+                return match.group(0)
+
+            return f"sqlite3.connect({quote}{candidate}{quote}{suffix}"
+
+        return re.sub(
+            r"sqlite3\.connect\(\s*(['\"])([^'\"]+\.(?:sqlite|db))\1(\s*(?:,|\)))",
+            replace_connect,
+            code_string,
+        )
 
     def _execute_altair_code(self, code_string: str, output_path: str) -> dict:
         """执行Altair代码并保存图像及JSON格式
-        
+
         Args:
             code_string: 要执行的Altair代码
             output_path: 输出图像的保存路径
-            
+
         Returns:
             dict: 执行结果，包含状态和信息
         """
         self._log(f"执行Altair代码并保存到: {output_path}")
-        
+
         # 创建目录（如果不存在）
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        
+
         # 同时准备JSON输出路径
         json_output_path = output_path.replace('.png', '.vega.json')
         self._log(f"JSON输出路径: {json_output_path}")
-        
+
         # 创建命名空间，包含常用库
         namespace = {
             'alt': alt,
@@ -213,35 +236,55 @@ class CodeGenerationAgent(Agent):
             'sqlite3': __import__('sqlite3'),
             'io': __import__('io'),
             'os': __import__('os'),
-            '_add_interactivity_to_json': self._add_interactivity_to_json
+            'self': self
         }
-        
+
         # 捕获标准输出和错误
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
-        
+
         try:
             # 先修复可能的缩进问题
-            fixed_code = self._fix_indentation(code_string)
-            
-            # 确保代码最终没有显示图表，而是保存图表
+            fixed_code = self._normalize_sqlite_paths(self._fix_indentation(code_string))
+
+            # The UI renders generated charts from Vega JSON. Drop user-authored
+            # display/export side effects so a slow PNG/browser export cannot
+            # block the live preview.
             lines = fixed_code.split('\n')
-            lines = [line for line in lines if ".to_json()" not in line and "print(" not in line and "exit(" not in line]
+            def _is_blocked_runtime_side_effect(line: str) -> bool:
+                stripped = line.strip()
+                return (
+                    ".to_json()" in stripped
+                    or "print(" in stripped
+                    or "exit(" in stripped
+                    or ".save(" in stripped
+                    or "alt.save(" in stripped
+                    or ".show(" in stripped
+                )
+
+            filtered_lines = []
+            blocked_call_depth = 0
+            for line in lines:
+                if blocked_call_depth > 0:
+                    blocked_call_depth += line.count("(") - line.count(")")
+                    if blocked_call_depth <= 0:
+                        blocked_call_depth = 0
+                    continue
+
+                if _is_blocked_runtime_side_effect(line):
+                    blocked_call_depth = max(0, line.count("(") - line.count(")"))
+                    continue
+
+                filtered_lines.append(line)
+
+            lines = filtered_lines
             modified_code = '\n'.join(lines).replace("exit()", "")
-            
-            # 剥离可能修改 Altair 全局状态的语句，防止污染后续渲染
-            modified_code = re.sub(
-                r'^[ \t]*alt\.(data_transformers|themes|renderers)\.enable\([^)]*\).*$',
-                '# [stripped] Altair global state modification removed',
-                modified_code,
-                flags=re.MULTILINE
-            )
-            
+
             # 如果代码包含main()函数，需要调用它
             if "def main():" in modified_code and "if __name__ == '__main__':" in modified_code:
                 self._log("检测到main()函数，添加调用")
                 modified_code += "\n\n# 调用main函数\ntry:\n    main()\nexcept Exception as e:\n    print(f'调用main函数时出错: {e}')"
-            
+
             # 在执行前，若为area图，确保y编码为不堆叠（stack=None）
             if "mark_area" in modified_code:
                 try:
@@ -269,90 +312,62 @@ class CodeGenerationAgent(Agent):
                     # 规范化失败时忽略，不阻塞执行
                     pass
 
-            # 识别最终的图表变量 — 优先选择复合图表（layer/concat），而非子组件
+            # 识别最后一个图表变量 - 改进的识别逻辑
             last_chart_var = None
-            
-            # 第一步：查找复合图表变量（使用 +, |, & 运算符或 alt.layer/hconcat/vconcat）
-            composite_assignments = re.findall(
-                r'(\w+)\s*=\s*(?:'
-                r'\(?\s*\w+\s*[\+\|\&]\s*\w+'  # var = a + b, var = (a + b | c)
-                r'|alt\.(?:layer|hconcat|vconcat|concat)\s*\('  # var = alt.layer(...)
-                r')',
-                modified_code
-            )
-            if composite_assignments:
-                last_chart_var = composite_assignments[-1]
-                self._log(f"找到复合图表变量: {last_chart_var}")
-            
-            # 第二步：如果没有复合图表，查找带 .resolve_scale 的变量
+
+            # 寻找所有可能的图表变量赋值语句
+            chart_assignments = re.findall(r'(\w+)\s*=\s*alt\.Chart', modified_code)
+            chart_assignments += re.findall(r'(\w+)\s*=\s*\(.*?\)\.resolve_scale', modified_code)
+            chart_assignments += re.findall(r'(\w+)\s*=.*?(?:chart|Chart)', modified_code)
+
+            # 如果找到了图表变量，使用最后一个
+            if chart_assignments:
+                last_chart_var = chart_assignments[-1]
+
+            # 检查代码最后是否直接引用了一个变量（可能是图表）
+            last_line_match = re.search(r'^\s*(\w+)\s*$', modified_code.split('\n')[-1].strip())
+            if last_line_match:
+                last_chart_var = last_line_match.group(1)
+
+            # 如果仍然没有找到图表变量，尝试更宽松的匹配
             if not last_chart_var:
-                resolve_assignments = re.findall(r'(\w+)\s*=\s*\(.*?\)\.resolve_scale', modified_code)
-                if resolve_assignments:
-                    last_chart_var = resolve_assignments[-1]
-                    self._log(f"通过 resolve_scale 找到图表变量: {last_chart_var}")
-            
-            # 第三步：使用常见的图表变量名（如 chart, vis 等）
-            if not last_chart_var:
-                common_chart_names = ['chart', 'vis', 'visualization', 'plot', 'fig', 'graph']
-                for name in common_chart_names:
-                    if re.search(rf'\b{name}\s*=\s*', modified_code):
-                        last_chart_var = name
-                        self._log(f"通过常见名称找到图表变量: {last_chart_var}")
-                        break
-            
-            # 第四步：回退到最后一个 alt.Chart 赋值
-            if not last_chart_var:
-                simple_assignments = re.findall(r'(\w+)\s*=\s*alt\.Chart', modified_code)
-                if simple_assignments:
-                    last_chart_var = simple_assignments[-1]
-                    self._log(f"通过 alt.Chart 赋值找到图表变量: {last_chart_var}")
-            
-            # 第五步：检查代码最后一行是否直接引用了一个变量
-            if not last_chart_var:
-                last_line_match = re.search(r'^\s*(\w+)\s*$', modified_code.split('\n')[-1].strip())
-                if last_line_match:
-                    last_chart_var = last_line_match.group(1)
-                    self._log(f"通过最后一行引用找到图表变量: {last_chart_var}")
-            
-            # 第六步：宽松匹配 — 所有包含 alt. 的赋值
-            if not last_chart_var:
+                # 查找所有可能的变量赋值，特别是包含alt.的
                 all_assignments = re.findall(r'(\w+)\s*=\s*.*alt\.', modified_code)
                 if all_assignments:
                     last_chart_var = all_assignments[-1]
                     self._log(f"通过宽松匹配找到图表变量: {last_chart_var}")
-            
-            self._log(f"最终确定的图表变量: {last_chart_var}")
-            
+
+            # 最后的备用方案：使用常见的图表变量名
+            if not last_chart_var:
+                common_chart_names = ['chart', 'vis', 'visualization', 'plot', 'fig', 'graph']
+                for name in common_chart_names:
+                    if f'{name} =' in modified_code or f'{name}=' in modified_code:
+                        last_chart_var = name
+                        self._log(f"通过常见名称找到图表变量: {last_chart_var}")
+                        break
+
             # 添加保存语句，如果找到了最后的图表变量
-            # 检查是否已有有效的 .save() 调用（排除注释行）
-            non_comment_lines = '\n'.join(
-                l for l in modified_code.split('\n') if not l.strip().startswith('#')
-            )
-            has_existing_save = ".save('" in non_comment_lines or 'alt.save(' in non_comment_lines
-            
             if last_chart_var:
-                if not has_existing_save:
-                    save_code = f"\n\n# 保存PNG图表\n{last_chart_var}.save('{output_path}')\n"
-                    modified_code += save_code
-                    self._log(f"添加PNG保存命令：{save_code}")
-                else:
-                    self._log("代码中已有有效的 .save() 调用，跳过添加PNG保存命令")
-                
-                # 添加保存JSON格式（使用 namespace 中的 _add_interactivity_to_json，无需 self）
+                # 添加保存JSON格式，使用更详细的错误处理
                 json_save_code = f"""
 # 保存JSON格式图表
 try:
+    # 获取JSON规范
     json_spec = {last_chart_var}.to_json()
     print(f"生成JSON规范成功，长度: {{len(json_spec)}}")
-    
-    json_spec = _add_interactivity_to_json(json_spec)
-    
+
+    # 添加交互功能
+    json_spec = self._add_interactivity_to_json(json_spec)
+
+    # 确保目录存在
     import os
     os.makedirs(os.path.dirname(os.path.abspath('{json_output_path}')), exist_ok=True)
-    
+
+    # 保存JSON文件
     with open('{json_output_path}', 'w') as f:
         f.write(json_spec)
-    
+
+    # 验证文件是否成功保存
     if os.path.exists('{json_output_path}'):
         file_size = os.path.getsize('{json_output_path}')
         print(f"JSON文件已成功保存到: {json_output_path}, 大小: {{file_size}} 字节")
@@ -366,54 +381,44 @@ except Exception as e:
                 modified_code += json_save_code
                 self._log(f"添加JSON保存命令：{json_save_code}")
             else:
+                # 如果没有找到图表变量，添加通用的保存逻辑
                 self._log("未找到图表变量，添加通用保存逻辑")
-                
-                if not has_existing_save:
-                    save_code = f"""
-# 保存PNG图表 - 通用逻辑
-try:
-    import altair as alt
-    for var_name, var_value in locals().items():
-        if isinstance(var_value, alt.TopLevelMixin):
-            var_value.save('{output_path}')
-            print(f"通过变量 {{var_name}} 保存PNG图表")
-            break
-    else:
-        print("警告：未找到Altair图表对象")
-except Exception as e:
-    print(f"保存PNG图表时出错: {{e}}")
-"""
-                    modified_code += save_code
-                    self._log(f"添加通用PNG保存命令")
-                
+
+                # 添加JSON保存
                 json_save_code = f"""
 # 保存JSON格式图表 - 通用逻辑
 try:
     import altair as alt
     import os
-    
+
+    # 查找所有可能的图表对象并保存JSON
     json_saved = False
     for var_name, var_value in locals().items():
         if isinstance(var_value, alt.TopLevelMixin):
+            # 获取JSON规范
             json_spec = var_value.to_json()
             print(f"通过变量 {{var_name}} 生成JSON规范成功，长度: {{len(json_spec)}}")
-            
-            json_spec = _add_interactivity_to_json(json_spec)
-            
+
+            # 添加交互功能
+            json_spec = self._add_interactivity_to_json(json_spec)
+
+            # 确保目录存在
             os.makedirs(os.path.dirname(os.path.abspath('{json_output_path}')), exist_ok=True)
-            
+
+            # 保存JSON文件
             with open('{json_output_path}', 'w') as f:
                 f.write(json_spec)
-            
+
+            # 验证文件是否成功保存
             if os.path.exists('{json_output_path}'):
                 file_size = os.path.getsize('{json_output_path}')
                 print(f"JSON文件已成功保存到: {json_output_path}, 大小: {{file_size}} 字节")
                 json_saved = True
                 break
-    
+
     if not json_saved:
         print("警告：未找到Altair图表对象，无法保存JSON文件")
-        
+
 except Exception as e:
     import traceback
     print(f"保存JSON文件时出错: {{e}}")
@@ -421,131 +426,87 @@ except Exception as e:
 """
                 modified_code += json_save_code
                 self._log(f"添加通用JSON保存命令")
-            
-            # 保存 Altair 全局状态，防止 exec 内部的代码污染后续渲染
-            _saved_dt = alt.data_transformers.active
-            _saved_theme = alt.themes.active
-            _saved_renderer = alt.renderers.active
-            
-            try:
-                with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                    exec(modified_code, namespace)
-            finally:
-                try:
-                    if alt.data_transformers.active != _saved_dt:
-                        alt.data_transformers.enable(_saved_dt)
-                        self._log(f"已恢复 data_transformers: {_saved_dt}")
-                    if alt.themes.active != _saved_theme:
-                        alt.themes.enable(_saved_theme)
-                        self._log(f"已恢复 themes: {_saved_theme}")
-                    if alt.renderers.active != _saved_renderer:
-                        alt.renderers.enable(_saved_renderer)
-                        self._log(f"已恢复 renderers: {_saved_renderer}")
-                except Exception as restore_err:
-                    self._log(f"恢复Altair全局状态时出错: {restore_err}")
-            
+
+            # 执行代码
+            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                exec(modified_code, namespace)
+
             # 检查图表是否被保存
             png_saved = os.path.exists(output_path)
             json_saved = os.path.exists(json_output_path)
-            
+
             self._log(f"PNG文件存在: {png_saved}, 路径: {output_path}")
             self._log(f"JSON文件存在: {json_saved}, 路径: {json_output_path}")
-            
+
             if not png_saved or not json_saved:
-                # 收集所有 Altair 图表对象，优先使用之前识别的 last_chart_var
-                chart_candidates = {}
+                # 如果没有保存，尝试找到chart对象并手动保存
                 for var_name, var_value in namespace.items():
                     if isinstance(var_value, alt.TopLevelMixin):
-                        chart_candidates[var_name] = var_value
-                
-                # 选择最佳图表对象：优先 last_chart_var，否则取最后一个
-                best_var_name = None
-                best_var_value = None
-                if last_chart_var and last_chart_var in chart_candidates:
-                    best_var_name = last_chart_var
-                    best_var_value = chart_candidates[last_chart_var]
-                elif chart_candidates:
-                    best_var_name = list(chart_candidates.keys())[-1]
-                    best_var_value = chart_candidates[best_var_name]
-                
-                if best_var_value is not None:
-                    self._log(f"后备机制选择图表对象：{best_var_name}（候选: {list(chart_candidates.keys())}）")
-                    try:
-                        if not png_saved:
-                            best_var_value.save(output_path)
-                            png_saved = os.path.exists(output_path)
-                            self._log(f"手动保存PNG: {png_saved}")
-                        
-                        if not json_saved:
-                            try:
-                                json_spec = best_var_value.to_json()
-                                self._log(f"手动生成JSON规范成功，长度: {len(json_spec)}")
-                                
-                                json_spec = self._add_interactivity_to_json(json_spec)
-                                
-                                os.makedirs(os.path.dirname(os.path.abspath(json_output_path)), exist_ok=True)
-                                
-                                with open(json_output_path, 'w') as f:
-                                    f.write(json_spec)
-                                
-                                json_saved = os.path.exists(json_output_path)
-                                if json_saved:
-                                    file_size = os.path.getsize(json_output_path)
-                                    self._log(f"手动保存JSON成功: {json_output_path}, 大小: {file_size} 字节")
-                                else:
-                                    self._log(f"警告：手动保存JSON失败，文件不存在: {json_output_path}")
-                            except Exception as e:
-                                self._log(f"手动保存JSON时出错: {e}")
-                                self._log(traceback.format_exc())
-                    except Exception as e:
-                        self._log(f"手动保存图表时出错: {e}")
-            
+                        self._log(f"找到图表对象：{var_name}")
+                        try:
+                            if not json_saved:
+                                try:
+                                    # 获取JSON规范
+                                    json_spec = var_value.to_json()
+                                    self._log(f"手动生成JSON规范成功，长度: {len(json_spec)}")
+
+                                    # 添加交互功能
+                                    json_spec = self._add_interactivity_to_json(json_spec)
+
+                                    # 确保目录存在
+                                    os.makedirs(os.path.dirname(os.path.abspath(json_output_path)), exist_ok=True)
+
+                                    # 保存JSON文件
+                                    with open(json_output_path, 'w') as f:
+                                        f.write(json_spec)
+
+                                    # 验证文件是否成功保存
+                                    json_saved = os.path.exists(json_output_path)
+                                    if json_saved:
+                                        file_size = os.path.getsize(json_output_path)
+                                        self._log(f"手动保存JSON成功: {json_output_path}, 大小: {file_size} 字节")
+                                    else:
+                                        self._log(f"警告：手动保存JSON失败，文件不存在: {json_output_path}")
+                                except Exception as e:
+                                    self._log(f"手动保存JSON时出错: {e}")
+                                    self._log(traceback.format_exc())
+                        except Exception as e:
+                            self._log(f"手动保存图表时出错: {e}")
+
+                        break
+
             # 执行后检查：如果文件未生成，尝试从执行环境中获取图表对象并保存
             if not png_saved or not json_saved:
                 self._log("执行后检查：尝试从执行环境中获取图表对象")
                 try:
+                    # 重新执行代码以获取图表对象
                     exec_globals = namespace.copy()
                     exec_locals = {}
-                    
+
+                    # 执行修改后的代码
                     with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
                         exec(modified_code, exec_globals, exec_locals)
-                    
-                    # 收集所有图表对象，优先使用 last_chart_var
-                    exec_chart_candidates = {}
+
+                    # 查找图表对象
+                    chart_obj = None
                     for var_name, var_value in exec_locals.items():
                         if isinstance(var_value, alt.TopLevelMixin):
-                            exec_chart_candidates[var_name] = var_value
-                    
-                    chart_obj = None
-                    chosen_name = None
-                    if last_chart_var and last_chart_var in exec_chart_candidates:
-                        chart_obj = exec_chart_candidates[last_chart_var]
-                        chosen_name = last_chart_var
-                    elif exec_chart_candidates:
-                        chosen_name = list(exec_chart_candidates.keys())[-1]
-                        chart_obj = exec_chart_candidates[chosen_name]
-                    
+                            chart_obj = var_value
+                            self._log(f"在执行环境中找到图表对象: {var_name}")
+                            break
+
+                    # 如果找到了图表对象，尝试保存
                     if chart_obj:
-                        self._log(f"在执行环境中选择图表对象: {chosen_name}（候选: {list(exec_chart_candidates.keys())}）")
-                        if not png_saved:
-                            try:
-                                chart_obj.save(output_path)
-                                if os.path.exists(output_path):
-                                    png_saved = True
-                                    self._log(f"执行后成功保存PNG文件: {output_path}")
-                                else:
-                                    self._log("执行后PNG文件保存失败")
-                            except Exception as e:
-                                self._log(f"执行后保存PNG文件时出错: {e}")
-                        
+                        # 保存JSON文件
                         if not json_saved:
                             try:
                                 json_spec = chart_obj.to_json()
+                                # 添加交互功能
                                 json_spec = self._add_interactivity_to_json(json_spec)
-                                
+
                                 with open(json_output_path, 'w') as f:
                                     f.write(json_spec)
-                                
+
                                 if os.path.exists(json_output_path):
                                     json_saved = True
                                     self._log(f"执行后成功保存JSON文件: {json_output_path}")
@@ -555,25 +516,32 @@ except Exception as e:
                                 self._log(f"执行后保存JSON文件时出错: {e}")
                     else:
                         self._log("执行后未找到图表对象")
-                        
+
                 except Exception as e:
                     self._log(f"执行后检查时出错: {e}")
-            
+
             # 最终检查
-            if png_saved:
-                self._log("成功执行Altair代码并保存PNG格式")
+            if png_saved or json_saved:
+                if png_saved:
+                    self._log("成功执行Altair代码并保存PNG格式")
+                else:
+                    self._log("PNG未保存，但已成功保存JSON格式")
                 result = {
                     "status": "success",
-                    "info": "Chart Image Successfully Saved"
+                    "info": "Chart Image Successfully Saved" if png_saved else "Chart JSON Successfully Saved"
                 }
-                
+
                 if json_saved:
                     self._log("成功保存JSON格式")
-                    result["info"] = "Chart Image and JSON Successfully Saved"
+                    result["info"] = (
+                        "Chart Image and JSON Successfully Saved"
+                        if png_saved
+                        else "Chart JSON Successfully Saved"
+                    )
                     result["json_path"] = json_output_path
                 else:
                     self._log("警告：JSON格式未保存")
-                
+
                 return result
             else:
                 error_msg = f"Execution successful but files not saved: PNG={png_saved}, JSON={json_saved}"
@@ -582,7 +550,7 @@ except Exception as e:
                     "status": "fail",
                     "info": error_msg
                 }
-            
+
         except Exception as e:
             error_msg = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
             self._log(f"执行Altair代码失败: {error_msg}")
@@ -590,13 +558,13 @@ except Exception as e:
                 "status": "fail",
                 "info": error_msg + "\n" + stdout_capture.getvalue() + stderr_capture.getvalue()
             }
-    
+
     def _fix_indentation(self, code_string: str) -> str:
         """修复代码中可能的缩进问题
-        
+
         Args:
             code_string: 需要修复的代码字符串
-            
+
         Returns:
             str: 修复后的代码字符串
         """
@@ -606,50 +574,50 @@ except Exception as e:
             return code_string  # 如果没有语法错误，直接返回原代码
         except IndentationError:
             self._log("检测到缩进错误，尝试修复")
-            
+
             # 按行分割代码
             lines = code_string.split('\n')
             fixed_lines = []
             current_indent = 0
             indent_stack = [0]  # 用于跟踪缩进级别
-            
+
             for i, line in enumerate(lines):
                 # 跳过空行
                 if not line.strip():
                     fixed_lines.append(line)
                     continue
-                
+
                 # 计算当前行的前导空格数
                 leading_spaces = len(line) - len(line.lstrip())
                 stripped_line = line.strip()
-                
+
                 # 检查是否是增加缩进的行（以冒号结尾）
                 if i > 0 and lines[i-1].strip().endswith(':'):
                     # 上一行以冒号结尾，应该增加缩进
                     current_indent = indent_stack[-1] + 4  # 增加一级缩进（4个空格）
                     indent_stack.append(current_indent)
-                
+
                 # 检查是否是减少缩进的行
                 elif stripped_line.startswith(('elif', 'else:', 'except', 'finally:', 'except:')):
                     # 回到上一级缩进
                     if len(indent_stack) > 1:  # 确保不会弹出最初的0
                         indent_stack.pop()
                     current_indent = indent_stack[-1]
-                
+
                 # 检查是否是结束块的行
                 elif i > 0 and lines[i-1].strip() == '' and leading_spaces < current_indent:
                     # 空行后缩进减少，可能是块结束
                     while len(indent_stack) > 1 and leading_spaces < indent_stack[-1]:
                         indent_stack.pop()
                     current_indent = indent_stack[-1]
-                
+
                 # 应用当前缩进级别
                 fixed_line = ' ' * current_indent + stripped_line
                 fixed_lines.append(fixed_line)
-            
+
             fixed_code = '\n'.join(fixed_lines)
             self._log("缩进修复完成")
-            
+
             # 再次检查修复后的代码
             try:
                 compile(fixed_code, '<string>', 'exec')
@@ -660,53 +628,56 @@ except Exception as e:
         except Exception as e:
             self._log(f"修复缩进时出错: {e}，返回原始代码")
             return code_string
-    
+
     def _execute_matplotlib_code(self, code_string: str, output_path: str) -> dict:
         """执行Matplotlib代码并保存图像
-        
+
         Args:
             code_string: 要执行的Matplotlib代码
             output_path: 输出图像的保存路径
-            
+
         Returns:
             dict: 执行结果，包含状态和信息
         """
         self._log(f"执行Matplotlib代码并保存到: {output_path}")
-        
+
         # 创建目录（如果不存在）
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        
-        # 创建命名空间，包含常用库
+
+        # 创建命名空间，包含常用库（plotly 仅在代码中使用时加载）
         namespace = {
             'pd': pd,
             'plt': plt,
             'np': __import__('numpy'),
-            'plotly': __import__('plotly', fromlist=['graph_objects']),
-            'go': __import__('plotly.graph_objects')
+            'sqlite3': __import__('sqlite3'),
+            'os': __import__('os'),
         }
-        
+        if 'plotly' in code_string or 'go.' in code_string:
+            namespace['plotly'] = __import__('plotly', fromlist=['graph_objects'])
+            namespace['go'] = __import__('plotly.graph_objects')
+
         # 捕获标准输出和错误
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
-        
+
         try:
             # 清除之前的所有图形，避免状态污染
             plt.close('all')
-            
+
             # 先修复可能的缩进问题
-            fixed_code = self._fix_indentation(code_string)
-            
+            fixed_code = self._normalize_sqlite_paths(self._fix_indentation(code_string))
+
             # 确保代码最终保存图表
             modified_code = fixed_code
 
             # 检测是否使用了plotly
             is_plotly = 'plotly' in modified_code or 'go.' in modified_code
-            
+
             if is_plotly:
                 self._log("检测到Plotly代码，添加适当的保存命令")
                 # 移除可能的显示命令
                 modified_code = modified_code.replace("fig.show()", "")
-                
+
                 # 如果代码中没有保存图表的命令，添加一个
                 if "fig.write_image(" not in modified_code and "fig.write_html(" not in modified_code:
                     modified_code += f"""
@@ -725,21 +696,21 @@ except Exception as e:
             else:
                 # 移除plt.show()调用，避免阻塞或显示窗口
                 modified_code = modified_code.replace("plt.show()", "")
-                
+
                 # 如果代码中没有保存图表的命令，添加一个
                 if "plt.savefig(" not in modified_code:
                     modified_code += f"\n\n# 保存图表\nplt.savefig('{output_path}', bbox_inches='tight')\n"
-            
+
             # 执行代码
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
                 exec(modified_code, namespace)
-            
+
             # 确保所有图形都已保存
             plt.savefig(output_path, bbox_inches='tight')
-            
+
             # 清理：关闭所有图形
             plt.close('all')
-            
+
             # 检查图表是否被保存
             if os.path.exists(output_path):
                 self._log("成功执行Matplotlib代码并保存图像")
@@ -754,11 +725,11 @@ except Exception as e:
                     "status": "fail",
                     "info": error_msg
                 }
-            
+
         except Exception as e:
             # 确保清理所有图形，即使出现异常
             plt.close('all')
-            
+
             error_msg = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
             self._log(f"执行Matplotlib代码失败: {error_msg}")
             return {
@@ -768,26 +739,26 @@ except Exception as e:
 
     def generate_visualization_code(self, db_path: str, user_query: str, sql_query: str, reference_path: str = None, existing_code_path: str = None) -> Tuple[bool, str]:
         """生成全新可视化代码
-        
+
         Args:
             db_path: 数据库文件路径
             user_query: 用户查询
             sql_query: SQL查询语句
             reference_path: (可选)参考图像或参考代码的文件路径(.png或.py文件)
             existing_code_path: (可选)已有代码的文件路径
-            
+
         Returns:
             Tuple[bool, str]: 状态（成功/失败）和Python/Altair代码字符串
         """
         self._log(f"开始生成可视化代码，数据库: {db_path}")
-        
+
         # 准备参考素材和图像URL
         reference_code = None
         reference_type = None
         img_sources = [] # [(url, description), ...]
         temp_dir = "./temp"
         os.makedirs(temp_dir, exist_ok=True)
-        
+
         if reference_path:
             if reference_path.lower().endswith(('.py')):
                 reference_type = "code"
@@ -795,17 +766,17 @@ except Exception as e:
                     with open(reference_path, 'r', encoding='utf-8') as f:
                         reference_code = f.read()
                     self._log(f"成功加载参考代码: {reference_path}")
-                    
+
                     # 执行参考代码并生成图像
                     temp_img_path = os.path.join(temp_dir, f"ref_code_vis_{self.agent_id}.png")
-                    
+
                     # 根据代码内容判断使用哪种执行方法
                     if "import matplotlib" in reference_code or "from matplotlib" in reference_code:
                         exec_result = self._execute_matplotlib_code(reference_code, temp_img_path)
                     else:
                         # 默认使用Altair执行
                         exec_result = self._execute_altair_code(reference_code, temp_img_path)
-                        
+
                     if exec_result["status"] == "success" and os.path.exists(temp_img_path):
                         # 转换图片为data URL格式
                         try:
@@ -816,7 +787,7 @@ except Exception as e:
                             self._log(f"转换参考代码图像为URL失败: {str(e)}")
                     else:
                         self._log(f"执行参考代码生成图像失败: {exec_result.get('info', '未知错误')}")
-                        
+
                 except Exception as e:
                     self._log(f"加载参考代码失败: {str(e)}")
                     return False, {"error": f"Failed to load reference code: {str(e)}"}
@@ -833,24 +804,24 @@ except Exception as e:
             else:
                 self._log(f"不支持的参考文件格式: {reference_path}")
                 return False, {"error": f"Unsupported reference file format: {reference_path}"}
-        
+
         existing_code = None
         if existing_code_path:
             try:
                 with open(existing_code_path, 'r', encoding='utf-8') as f:
                     existing_code = f.read()
                 self._log(f"成功加载已有代码: {existing_code_path}")
-                
+
                 # 执行已有代码并生成图像
                 temp_img_path = os.path.join(temp_dir, f"existing_code_vis_{self.agent_id}.png")
-                
+
                 # 根据代码内容判断使用哪种执行方法
                 if "import matplotlib" in existing_code or "from matplotlib" in existing_code:
                     exec_result = self._execute_matplotlib_code(existing_code, temp_img_path)
                 else:
                     # 默认使用Altair执行
                     exec_result = self._execute_altair_code(existing_code, temp_img_path)
-                    
+
                 if exec_result["status"] == "success" and os.path.exists(temp_img_path):
                     # 转换图片为data URL格式
                     try:
@@ -864,7 +835,7 @@ except Exception as e:
             except Exception as e:
                 self._log(f"加载已有代码失败: {str(e)}")
                 return False, {"error": f"Failed to load existing code: {str(e)}"}
-        
+
         # 构建提示词
         prompt = f"""
 ## Visualization Task
@@ -928,7 +899,7 @@ Generate Python visualization code using the Altair library based on the followi
                 user_content_list.append({"type": "text", "text": f"\n--- IMAGE CONTEXT ---\n{description}\n(Image follows)"})
                 # Add the image URL
                 user_content_list.append({"type": "image_url", "image_url": {"url": img_url}})
-        
+
         # 创建预迭代以减小api请求降低成本
         user_messages = [
             {"role": "user", "content": user_content_list},
@@ -963,14 +934,14 @@ I'll start by getting the full list of chart categories and types.
             # temperature=0.2,
             max_iterations=10
         )
-        
+
         self._log(f"ReAct模式生成完成，使用工具: {'是' if used_tool else '否'}")
         self._log(f"原始代码生成结果: {result}")
-        
+
         # 尝试提取Python代码
         code_pattern = r'```(?:python)?\s*(import[\s\S]*?)```'
         match = re.search(code_pattern, result, re.DOTALL)
-        
+
         if match:
             code = match.group(1).strip()
             self._log("成功从文本中提取Python代码")
@@ -985,155 +956,67 @@ I'll start by getting the full list of chart categories and types.
                 return False, {"error": "无法提取Python代码", "raw_result": result}
 
     def _add_interactivity_to_json(self, json_spec: str) -> str:
-        """向Vega-Lite JSON规范添加交互功能
-        
-        对分层图表（layered chart）和单层图表采用不同策略：
-        - 分层图表：将选择参数添加到主数据层，避免顶层 point 选择导致重复信号
-        - 单层图表：将选择参数添加到顶层
+        """Normalize Vega-Lite JSON without injecting fragile selections.
+
+        Args:
+            json_spec: Vega-Lite JSON规范字符串
+
+        Returns:
+            str: 添加了交互功能的JSON规范字符串
         """
         try:
+            # 解析JSON规范
             spec = json.loads(json_spec)
-            is_layered = 'layer' in spec
-            
-            if is_layered:
-                self._log("检测到分层图表，将交互参数添加到主数据层")
-                spec = self._add_interactivity_layered(spec)
-            else:
-                self._log("检测到单层图表，将交互参数添加到顶层")
-                spec = self._add_interactivity_single(spec)
-            
+
+            # Generic selections injected into composed/layered charts can
+            # compile to duplicate Vega signals. Keep user-authored specs
+            # renderable by only de-duplicating existing params here.
+            existing_params = spec.get('params', [])
+            if isinstance(existing_params, list):
+                seen_param_names = set()
+                deduped_params = []
+                for param in existing_params:
+                    if not isinstance(param, dict):
+                        deduped_params.append(param)
+                        continue
+                    name = param.get('name')
+                    if name and name in seen_param_names:
+                        continue
+                    if name:
+                        seen_param_names.add(name)
+                    deduped_params.append(param)
+                if deduped_params:
+                    spec['params'] = deduped_params
+                elif 'params' in spec:
+                    del spec['params']
+
+            # 转换回JSON字符串
             return json.dumps(spec)
-            
+
         except Exception as e:
             self._log(f"添加交互功能时出错: {str(e)}")
             self._log(traceback.format_exc())
+            # 如果出错，返回原始JSON
             return json_spec
-    
-    def _add_interactivity_layered(self, spec: dict) -> dict:
-        """为分层图表添加交互功能，将选择参数放到主数据层中"""
-        # 找到主数据层（第一个含有数据驱动 mark 的层）
-        target_layer = None
-        for layer in spec.get('layer', []):
-            mark = layer.get('mark', {})
-            mark_type = mark.get('type', '') if isinstance(mark, dict) else mark
-            if mark_type in ('bar', 'line', 'area', 'point', 'circle', 'square', 'rect'):
-                target_layer = layer
-                break
-        
-        if target_layer is None:
-            self._log("分层图表中未找到适合添加交互的数据层，跳过")
-            return spec
-        
-        existing_params = target_layer.get('params', [])
-        existing_names = {p.get('name') for p in existing_params if isinstance(p, dict)}
-        
-        params = []
-        if 'select' not in existing_names:
-            params.append({"name": "select", "select": {"type": "point", "on": "click"}})
-        if 'highlight' not in existing_names:
-            params.append({"name": "highlight", "select": {"type": "point", "on": "pointerover"}})
-        
-        if not params:
-            return spec
-        
-        target_layer['params'] = existing_params + params
-        
-        # 为主数据层添加颜色条件（empty: false 保证默认显示原始颜色）
-        if 'encoding' in target_layer and 'color' in target_layer['encoding']:
-            original_color = copy.deepcopy(target_layer['encoding']['color'])
-            # 跳过固定值颜色（如 {"value": "black"}），只处理字段映射颜色
-            if 'field' in original_color:
-                target_layer['encoding']['color'] = {
-                    "condition": [
-                        {"param": "select", "empty": False, "value": "orange"},
-                        {"param": "highlight", "empty": False, "value": "gold"}
-                    ],
-                    **original_color
-                }
-        
-        return spec
-    
-    def _add_interactivity_single(self, spec: dict) -> dict:
-        """为单层图表添加交互功能"""
-        existing_params = spec.get('params', [])
-        existing_names = {p.get('name') for p in existing_params if isinstance(p, dict)}
-        
-        chart_type = spec.get('mark', {}).get('type', '') if isinstance(spec.get('mark'), dict) else spec.get('mark', '')
-        
-        params = []
-        if 'select' not in existing_names:
-            params.append({"name": "select", "select": {"type": "point", "on": "click"}})
-        if 'highlight' not in existing_names:
-            params.append({"name": "highlight", "select": {"type": "point", "on": "pointerover"}})
-        
-        # 对支持的图表类型添加阈值滑块
-        if chart_type in ('bar', 'line', 'area', 'point', 'circle', 'square'):
-            if 'encoding' in spec and 'y' in spec['encoding'] and spec['encoding']['y'].get('type') == 'quantitative':
-                y_values = []
-                if 'datasets' in spec and spec.get('data', {}).get('name') in spec['datasets']:
-                    dataset = spec['datasets'][spec['data']['name']]
-                    y_field = spec['encoding']['y'].get('field')
-                    if y_field and isinstance(dataset, list):
-                        y_values = [item.get(y_field, 0) for item in dataset if y_field in item]
-                
-                if y_values and 'threshold' not in existing_names:
-                    min_val = min(y_values)
-                    max_val = max(y_values)
-                    step = (max_val - min_val) / 100 if max_val > min_val else 0.1
-                    params.append({
-                        "name": "threshold",
-                        "value": (min_val + max_val) / 2,
-                        "bind": {"input": "range", "min": min_val, "max": max_val, "step": step}
-                    })
-        
-        if not params:
-            return spec
-        
-        spec["params"] = existing_params + params
-        
-        if 'encoding' in spec and 'color' in spec['encoding']:
-            original_color = copy.deepcopy(spec['encoding']['color'])
-            if 'field' in original_color:
-                spec['encoding']['color'] = {
-                    "condition": [
-                        {"param": "select", "empty": False, "value": "orange"},
-                        {"param": "highlight", "empty": False, "value": "gold"}
-                    ],
-                    **original_color
-                }
-                
-                if any(p.get('name') == 'threshold' for p in params):
-                    spec['encoding']['opacity'] = {
-                        "condition": {
-                            "test": {
-                                "field": spec['encoding']['y'].get('field'),
-                                "gt": {"expr": "threshold"}
-                            },
-                            "value": 1
-                        },
-                        "value": 0.3
-                    }
-        
-        return spec
-    
+
     def _img_to_img_url(self, img_path: str) -> str:
         """将图片转换为image_url
-        
+
         支持jpg、png、jpeg格式
-        
+
         Args:
             img_path: 图片文件路径
-            
+
         Returns:
             str: 图片的data URL
-            
+
         Raises:
             ValueError: 如果图片不存在或格式不支持
         """
         if not os.path.exists(img_path):
             self._log(f"图片文件不存在: {img_path}")
             raise ValueError(f"图片文件不存在: {img_path}")
-            
+
         # 获取文件扩展名并确定mime type
         ext = os.path.splitext(img_path)[1].lower()
         mime_types = {
@@ -1141,21 +1024,21 @@ I'll start by getting the full list of chart categories and types.
             '.jpeg': 'image/jpeg',
             '.png': 'image/png'
         }
-        
+
         if ext not in mime_types:
             self._log(f"不支持的图片格式: {ext}，仅支持 {', '.join(mime_types.keys())}")
             raise ValueError(f"不支持的图片格式: {ext}，仅支持 {', '.join(mime_types.keys())}")
-        
+
         try:
             with open(img_path, "rb") as image_file:
                 encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-                
+
             # 检查编码字符串是否为空或太短
             if not encoded_string or len(encoded_string) < 10:
                 error_msg = f"图片编码为空或太短: {img_path}, 长度: {len(encoded_string) if encoded_string else 0}"
                 self._log(error_msg)
                 raise ValueError(error_msg)
-                
+
             return f"data:{mime_types[ext]};base64,{encoded_string}"
         except Exception as e:
             error_msg = f"读取图片文件失败: {str(e)}"
@@ -1164,7 +1047,7 @@ I'll start by getting the full list of chart categories and types.
 
     def modify_visualization_code(self, existing_code: str, recommendations: List[Dict] = None) -> Tuple[bool, str]:
         """根据需求修改已有代码
-        
+
         Args:
             existing_code: 现有的代码字符串
             recommendations: 来自ValidationEvaluationAgent的代码修改建议列表
@@ -1172,7 +1055,7 @@ I'll start by getting the full list of chart categories and types.
                - priority: high|medium|low
                - component: data_processing|visualization_library|visualization_implementation
                - rationale: Explanation of why this change is necessary and how it addresses the issue
-            
+
         Returns:
             Tuple[bool, str]: 状态（成功/失败）和修改后的Python/Altair代码字符串
         """
@@ -1181,7 +1064,7 @@ I'll start by getting the full list of chart categories and types.
         if ".py" in existing_code:
             self._log("existing_code不能是文件路径")
             return False, {"error": "existing_code cannot be a file path"}
-        
+
         # 如果没有建议，直接返回现有代码
         if not recommendations:
             self._log("没有代码修改建议，返回现有代码")
@@ -1193,7 +1076,7 @@ I'll start by getting the full list of chart categories and types.
             # 创建一个新字典，避免修改原始对象
             normalized_rec = rec.copy() if isinstance(rec, dict) else {"description": str(rec)}
             normalized_recommendations.append(normalized_rec)
-            
+
         self._log(f"修改建议数量: {len(normalized_recommendations)}")
 
         # 构建提示词
@@ -1207,15 +1090,15 @@ I'll start by getting the full list of chart categories and types.
 
 ### Modification Recommendations
 """
-        
+
         # 对建议按优先级排序
         priority_order = {"high": 0, "medium": 1, "low": 2}
-        
+
         sorted_recs = sorted(
-            normalized_recommendations, 
+            normalized_recommendations,
             key=lambda x: priority_order.get(x.get("priority", "medium").lower(), 1)
         )
-        
+
         for i, rec in enumerate(sorted_recs, 1):
             if isinstance(rec, str):
                 prompt += f"**#{i}**: {rec}\n"
@@ -1224,7 +1107,7 @@ I'll start by getting the full list of chart categories and types.
                 priority = rec.get("priority", "medium").upper()
                 component = rec.get("component", "")
                 rationale = rec.get("rationale", "")
-                
+
                 prompt += f"**#{i} ({priority})**: {desc}\n"
                 if component:
                     prompt += f"_Component: {component}_\n"
@@ -1285,20 +1168,20 @@ This tool will only verify if the code runs without errors - it won't show me th
             # temperature=0.2,
             max_iterations=10
         )
-        
+
         self._log(f"ReAct模式修改完成，使用工具: {'是' if used_tool else '否'}")
         self._log(f"原始代码修改结果: {result}")
-        
+
         # 尝试提取最终代码 - 优化提取逻辑
         # 1. 首先尝试提取Python代码块
         code_pattern = r'```(?:python)?\s*(import[\s\S]*?)```'
         match = re.search(code_pattern, result, re.DOTALL)
-        
+
         if match:
             code = match.group(1).strip()
             self._log("成功从代码块中提取修改后的Python代码")
             return True, code
-        
+
         # 2. 尝试查找以import开头的内容块
         import_pattern = r'(?:^|\n)(import[\s\S]*?)(?:$|\n\n)'
         match = re.search(import_pattern, result, re.DOTALL)
@@ -1306,7 +1189,7 @@ This tool will only verify if the code runs without errors - it won't show me th
             code = match.group(1).strip()
             self._log("成功从文本中提取以import开头的Python代码块")
             return True, code
-            
+
         # 3. 最后检查整个结果是否就是Python代码
         if result.strip().startswith("import"):
             self._log("使用整个响应作为修改后的Python代码")
@@ -1320,21 +1203,21 @@ if __name__ == "__main__":
     # 测试代码生成智能体
     import sys
     import os
-    
+
     # 创建日志目录
     os.makedirs("./logs", exist_ok=True)
-    
+
     # 初始化代码生成智能体
-    code_agent = CodeGenerationAgent(model_type="gemini-2.0-flash@gemini-2.0-flash", agent_id=20, use_log=True)
-    
+    code_agent = CodeGenerationAgent(model_type="gemini-3-flash-preview@gemini-3-flash-preview", agent_id=20, use_log=True)
+
     code_agent._log("\n===== 测试 CodeGenerationAgent =====")
-    
+
     user_query = "Can you create an interactive scatter plot showing the relationship between students' ages and how many activities they participate in? I'd like to see each student represented as a circle, with different colors for each major so I can spot any patterns across different fields of study."
     db_path = "./database/activity_1.sqlite"
     # reference_path = "./vis_bench/code/matplotlib/Advanced Calculations___calculate_residuals.py"
     sql_query = "SELECT S.Age, COUNT(P.actid) AS num_activities, S.Major FROM Student AS S JOIN Participates_in AS P ON S.StuID = P.stuid GROUP BY S.StuID;"
-    
-    
+
+
     code_agent._log("\n测试生成可视化代码 (使用参考图像):")
     status_with_ref, code_with_ref = code_agent.generate_visualization_code(
         db_path, user_query, sql_query
@@ -1395,17 +1278,17 @@ if __name__ == "__main__":
 # db_path = './database/activity_1.sqlite'
 # conn = sqlite3.connect(db_path)
 # query = '''
-# SELECT 
+# SELECT
 #     S.StuID,
 #     A.activity_name,
 #     S.Age,
 #     AVG(S.Age) OVER (PARTITION BY A.activity_name) AS avg_age_by_activity,
 #     S.Age - AVG(S.Age) OVER (PARTITION BY A.activity_name) AS age_delta
-# FROM 
+# FROM
 #     Student AS S
-# JOIN 
+# JOIN
 #     Participates_in AS P ON S.StuID = P.StuID
-# JOIN 
+# JOIN
 #     Activity AS A ON P.actid = A.actid
 # '''
 # df = pd.read_sql_query(query, conn)
@@ -1425,16 +1308,16 @@ if __name__ == "__main__":
 
 # #     test_query = "I came across this line chart with a shaded band that shows trends and uncertainty—it looks really professional. Could you create something similar to visualize how the average number of home runs per team has changed over the years, using the batting data from the database? I'd like to see the full history of baseball home runs with a 95% confidence interval band around the average, and make the chart wider to show the long-term trend better."
 
-#     sql_query = """SELECT 
+#     sql_query = """SELECT
 #     A.activity_name,
 #     AVG(S.Age) AS Avg_Age
-# FROM 
+# FROM
 #     Activity AS A
-# JOIN 
+# JOIN
 #     Participates_in AS P ON A.actid = P.actid
-# JOIN 
+# JOIN
 #     Student AS S ON P.stuid = S.StuID
-# GROUP BY 
+# GROUP BY
 #     A.actid, A.activity_name;"""
 
 #     python_recommendations = [
@@ -1452,10 +1335,10 @@ if __name__ == "__main__":
 #     }
 #   ]
 
-    
+
 #     code_agent._log("\n测试根据评估结果修改可视化代码:")
 #     mod_status, modified_code = code_agent.modify_visualization_code(
-#         test_code, 
+#         test_code,
 #         # sql_query,
 #         python_recommendations=python_recommendations
 #     )
@@ -1463,5 +1346,5 @@ if __name__ == "__main__":
 #         code_agent._log(f"根据评估结果修改后的可视化代码:\n{modified_code}")
 #     else:
 #         code_agent._log(f"根据评估结果修改可视化代码失败: {modified_code}")
-    
-    code_agent._log("\n===== 测试完成 =====") 
+
+    code_agent._log("\n===== 测试完成 =====")

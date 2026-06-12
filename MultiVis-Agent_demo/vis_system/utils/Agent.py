@@ -24,11 +24,11 @@ class Agent:
     负责处理与语言模型的交互，包括提示词的处理和响应的解析
     """
     
-    def __init__(self, model_type: str = "gemini-2.0-flash@gemini-2.0-flash", system_prompt: str = "", agent_name: str = "llm_processor", agent_id: str = 0, use_log: bool = False):
+    def __init__(self, model_type: str = "gemini-3-flash-preview@gemini-3-flash-preview", system_prompt: str = "", agent_name: str = "llm_processor", agent_id: str = 0, use_log: bool = False):
         """初始化LLM处理器
         
         Args:
-            model_type: 使用的模型种类，格式为text_model@img_model，默认为gemini-2.0-flash@gemini-2.0-flash
+            model_type: 使用的模型种类，格式为text_model@img_model，默认为gemini-3-flash-preview@gemini-3-flash-preview
             system_prompt: 系统提示词，默认为空
             agent_name: 智能体名称，默认为"llm_processor"
             agent_id: 智能体ID，默认为None
@@ -65,11 +65,11 @@ class Agent:
     # Configuration Methods
     #--------------------------------------------------------------------------
     
-    def set_model(self, model_type: str = "gemini-2.0-flash@gemini-2.0-flash"):
+    def set_model(self, model_type: str = "gemini-3-flash-preview@gemini-3-flash-preview"):
         """设置使用的模型类型
         
         Args:
-            model_type: 模型类型，格式为text_model@img_model，默认为gemini-2.0-flash@gemini-2.0-flash
+            model_type: 模型类型，格式为text_model@img_model，默认为gemini-3-flash-preview@gemini-3-flash-preview
             
         Raises:
             ValueError: 当指定了不支持的模型类型时抛出
@@ -440,19 +440,26 @@ class Agent:
             messages: 消息列表
             **kwargs: 传递给模型的其他参数
         """
-        response = None
-        while not response:
+        max_attempts = max(1, int(os.environ.get("MULTIVIS_LLM_MAX_RETRIES", "3")))
+        retry_sleep = max(0.0, float(os.environ.get("MULTIVIS_LLM_RETRY_SLEEP_SECONDS", "1")))
+        last_error = None
+
+        for attempt in range(1, max_attempts + 1):
             try:
-                response = client.chat.completions.create(
+                return client.chat.completions.create(
                     model=model,
                     messages=messages,
                     **kwargs
                 )
             except Exception as e:
-                self._log(f"调用LLM失败: {str(e)}")
-                print(f"调用LLM失败: {str(e)}")
-                time.sleep(1)
-        return response
+                last_error = e
+                message = f"调用LLM失败 ({attempt}/{max_attempts}): {str(e)}"
+                self._log(message)
+                print(message)
+                if attempt < max_attempts and retry_sleep:
+                    time.sleep(retry_sleep)
+
+        raise RuntimeError(f"LLM request failed after {max_attempts} attempts: {last_error}") from last_error
     
     def chat(self, prompt: str, user_messages: list = None, img_urls: List[str] = None, use_history: bool = True, **kwargs) -> str:
         """

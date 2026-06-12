@@ -3,22 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>CROSS-MODAL DATA VISUALIZATION SYSTEM</title>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-    <!-- Prism.js for syntax highlighting -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
-    
-    <!-- Vega-Lite, Vega-Embed for interactive charts -->
-    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
-    <!-- sql.js for client-side SQLite parsing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js"></script>
-    
+    {% include '_vendor_head.html' %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/multivis-theme.css') }}">
+
     <!-- 添加关键JavaScript函数到头部 -->
     <script>
     // 切换下拉菜单的显示与隐藏
@@ -29,7 +16,7 @@
             dropdown.classList.toggle('show');
         }
     }
-    
+
     // 关闭下拉菜单
     function closeDropdown() {
         var dropdown = document.getElementById('codeDropdown');
@@ -37,20 +24,20 @@
             dropdown.classList.remove('show');
         }
     }
-    
+
     // 显示代码输入模态框
     function showCodeInputModal() {
         console.log('Opening code input modal');
         document.getElementById('codeInputArea').value = '';
         document.getElementById('codeInputModal').classList.add('active');
     }
-    
+
     // 关闭代码输入模态框
     function closeCodeInputModal() {
         console.log('Closing code input modal');
         document.getElementById('codeInputModal').classList.remove('active');
     }
-    
+
     // 保存代码输入
     function saveCodeInput() {
         console.log('Saving code input');
@@ -61,21 +48,22 @@
             return;
         }
         console.log('Code entered successfully');
-        
+
         // 保存代码到隐藏字段
         document.getElementById('code').value = codeInput;
-        
+
         // 显示代码信息
         document.getElementById('code-file-name').innerText = 'Code entered manually';
         document.getElementById('code-info').style.display = 'flex';
         document.getElementById('code-delete-btn').style.display = 'flex';
-        
+        setReferenceBadge('code-source-badge', 'Manual');
+
         // 关闭模态框
         closeCodeInputModal();
-        
+
         showToast('Code added successfully', 'success');
     }
-    
+
     // 触发文件上传
     function triggerFileUpload() {
         console.log('Triggering file upload');
@@ -86,7 +74,7 @@
             console.error('File input element not found');
         }
     }
-    
+
     // 处理代码文件上传
     function handleCodeUpload(input, targetTextareaId) {
         console.log('File upload handler triggered');
@@ -96,25 +84,26 @@
             return;
         }
         console.log('File selected:', file.name);
-        
+
         // 显示代码信息
         document.getElementById('code-file-name').innerText = file.name;
         document.getElementById('code-info').style.display = 'flex';
         document.getElementById('code-delete-btn').style.display = 'flex';
-        
+        setReferenceBadge('code-source-badge', 'Uploaded');
+
         // 显示当前文件名
         const fileNameSpanId = 'code-file-name';
         document.getElementById(fileNameSpanId).innerText = file.name;
-        
+
         // 显示删除按钮
         const deleteButtonId = 'code-delete-btn';
         document.getElementById(deleteButtonId).style.display = 'flex';
-        
+
         // 读取文件内容
         const reader = new FileReader();
         reader.onload = function(e) {
             let content = e.target.result;
-            
+
             // 如果是.ipynb文件，提取代码单元格
             if (file.name.endsWith('.ipynb')) {
                 try {
@@ -125,13 +114,13 @@
                     return;
                 }
             }
-            
+
             // 填充到对应的textarea
             document.getElementById(targetTextareaId).value = content;
         };
         reader.readAsText(file);
     }
-    
+
     // 从Jupyter notebook中提取代码
     function extractCodeFromNotebook(notebook) {
         let code = '';
@@ -148,26 +137,26 @@
         }
         return code;
     }
-    
+
     // 显示文件名（用于数据库文件上传）
     function showDatabaseFileName(input) {
         var fileName = input.files.length > 0 ? input.files[0].name : '';
         var fileNameElement = document.getElementById('db-file-name');
         fileNameElement.innerText = fileName;
-        
+
         // 存储数据库名到隐藏字段
         document.getElementById('db_name').value = fileName;
-        
+
         // 显示删除按钮（如果有文件被选择）
         if (fileName) {
             document.getElementById('db-file-delete-btn').style.display = 'flex';
-            
+
             // 添加点击样式和事件
             fileNameElement.classList.add('clickable');
             fileNameElement.onclick = function() {
                 previewDatabaseFile(input.files[0]);
             };
-            
+
             // 显示成功上传提示
             showToast('Database file selected: ' + fileName, 'success');
 
@@ -197,7 +186,7 @@
             }
             const SQL = await initSqlJs({
                 locateFile: function(file) {
-                    return 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/' + file;
+                    return '/static/vendor/sqljs/' + file;
                 }
             });
             const uInt8Array = new Uint8Array(arrayBuffer);
@@ -247,6 +236,25 @@
         }
     }
 
+    async function loadDbStructureByName(dbName) {
+        if (!dbName) return;
+        try {
+            window.__clientSqliteDb = null;
+            window.__clientSqliteDbName = dbName;
+
+            const response = await fetch(`/database_schema?db_name=${encodeURIComponent(dbName)}`);
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to load database structure');
+            }
+
+            renderDbStructure(data.structure || []);
+        } catch (err) {
+            console.error('loadDbStructureByName error:', err);
+            showToast('Failed to load database structure', 'error');
+        }
+    }
+
     function renderDbStructure(structure) {
         const section = document.getElementById('dbStructureSection');
         const container = document.getElementById('dbStructureContainer');
@@ -259,6 +267,9 @@
         }
 
         section.style.display = 'block';
+        if (window.innerWidth >= 900 && localStorage.getItem('mv_schema_collapsed') !== '1') {
+            expandSchemaPanel();
+        }
 
         // Header db name
         const dbHidden = document.getElementById('db_name');
@@ -438,43 +449,69 @@
         const dbInput = document.getElementById('db_file');
         if (dbInput && dbInput.files && dbInput.files[0]) {
             parseAndShowDatabaseStructure(dbInput.files[0]);
+            return;
+        }
+
+        const dbName = (document.getElementById('db_name') && document.getElementById('db_name').value) || '';
+        if (dbName) {
+            loadDbStructureByName(dbName);
         }
     }
-    
+
+    function setReferenceBadge(badgeId, label, visible = true) {
+        const badge = document.getElementById(badgeId);
+        if (!badge) return;
+        badge.textContent = label || '';
+        badge.style.display = visible ? 'inline-flex' : 'none';
+    }
+
     // 显示文件名（用于图片上传）
     function showFileName(input) {
         console.log('Showing file name for uploaded image');
         var fileName = input.files.length > 0 ? input.files[0].name : '';
         var fileNameElement = document.getElementById('file-name');
+        var imageInfoElement = document.getElementById('image-info');
+        const benchmarkUrl = document.getElementById('benchmark_ref_image_url');
+        const benchmarkName = document.getElementById('benchmark_ref_image_name');
+        if (benchmarkUrl) benchmarkUrl.value = '';
+        if (benchmarkName) benchmarkName.value = '';
         fileNameElement.innerText = fileName;
-        
+
         // 显示删除按钮（如果有文件被选择）
         if (fileName) {
             document.getElementById('ref-image-delete-btn').style.display = 'flex';
-            
+            if (imageInfoElement) {
+                imageInfoElement.style.display = 'flex';
+            }
+            setReferenceBadge('image-source-badge', 'Uploaded');
+
             // 添加点击样式和事件
             fileNameElement.classList.add('clickable');
             fileNameElement.onclick = function() {
                 previewUploadedImage(input.files[0]);
             };
-            
+
             // 显示成功上传提示
             showToast('Image uploaded successfully: ' + fileName, 'success');
         } else {
             // 移除点击样式和事件
             fileNameElement.classList.remove('clickable');
             fileNameElement.onclick = null;
+            if (imageInfoElement) {
+                imageInfoElement.style.display = 'none';
+            }
+            setReferenceBadge('image-source-badge', '', false);
         }
     }
-    
+
     // 预览数据库文件信息
     function previewDatabaseFile(file) {
         if (!file) return;
-        
+
         const fileSize = (file.size / 1024).toFixed(2) + ' KB';
         const fileType = file.type || 'application/octet-stream';
         const lastModified = new Date(file.lastModified).toLocaleString();
-        
+
         // 创建预览信息
         const previewInfo = `
             <div style="padding: 15px;">
@@ -485,15 +522,15 @@
                 <p><strong>最后修改:</strong> ${lastModified}</p>
             </div>
         `;
-        
+
         // 显示预览信息
         showModal('数据库文件信息', previewInfo);
     }
-    
+
     // 预览上传的图片
     function previewUploadedImage(file) {
         if (!file) return;
-        
+
         const reader = new FileReader();
         reader.onload = function(e) {
             const imageSrc = e.target.result;
@@ -501,17 +538,17 @@
         };
         reader.readAsDataURL(file);
     }
-    
+
     // 图片缩放变量
     let currentZoom = 1;
     let minZoom = 0.2;
     let maxZoom = 5;
-    
+
     // 显示图片模态框
     function showImageModal(imageSrc) {
         openImageModal(imageSrc);
     }
-    
+
     // 通用的显示模态框函数
     function showModal(title, content) {
         // 检查是否已存在模态框
@@ -531,12 +568,12 @@
                 </div>
             `;
             document.body.appendChild(modal);
-            
+
             // 添加关闭事件
             modal.querySelector('.close').onclick = function() {
                 modal.style.display = 'none';
             };
-            
+
             // 点击模态框外部关闭
             window.onclick = function(event) {
                 if (event.target === modal) {
@@ -544,31 +581,43 @@
                 }
             };
         }
-        
+
         // 更新模态框内容
         modal.querySelector('.modal-title').textContent = title;
         modal.querySelector('.modal-body').innerHTML = content;
-        
+
         // 显示模态框
         modal.style.display = 'block';
     }
-    
+
     // 加载历史记录项
     function loadHistoryItem(index) {
+        if (typeof closeMobileSidebar === 'function') {
+            closeMobileSidebar();
+        }
+        const historyModeInput = document.getElementById('from_history_mode');
+        const historyTimeInput = document.getElementById('history_time');
+        if (historyModeInput) {
+            historyModeInput.value = 'true';
+        }
+        if (historyTimeInput) {
+            historyTimeInput.value = '';
+        }
+
         // 移除所有历史记录项的active类
         document.querySelectorAll('.history-item').forEach(item => {
             item.classList.remove('active');
         });
-        
+
         // 为当前点击的项添加active类
         const clickedItem = document.querySelector(`.history-item[data-index="${index}"]`);
         if (clickedItem) {
             clickedItem.classList.add('active');
         }
-        
+
         // 显示加载提示
         showToast('Loading history...', 'info');
-        
+
         // 发送AJAX请求获取历史记录数据
         fetch(`/load_history/${index}`)
             .then(response => response.json())
@@ -577,19 +626,23 @@
                     // 填充表单字段 - 适应新的API响应格式
                     // 注意：我们已经将data.data扁平化为data
                     document.getElementById('db_name').value = data.db_name || '';
+                    if (historyTimeInput) {
+                        historyTimeInput.value = data.time || '';
+                    }
                     document.getElementById('db-file-name').innerText = data.db_name || '';
                     if (data.db_name) {
                         document.getElementById('db-file-delete-btn').style.display = 'flex';
+                        loadDbStructureByName(data.db_name);
                     }
                     document.querySelector('textarea[name="nl_query"]').value = data.nl_query || '';
-                    
+
                     // 处理代码内容
                     const codeContent = data.code || data.ref_code || data.mod_code || '';
                     document.getElementById('code').value = codeContent;
-                    
+
                     // 设置代码类型勾选框
                     document.getElementById('is_database_code').checked = data.is_database_code || !!data.mod_code;
-                    
+
                     // 如果有代码，显示代码信息和删除按钮
                     if (codeContent) {
                         document.getElementById('code-delete-btn').style.display = 'flex';
@@ -600,13 +653,34 @@
                         document.getElementById('code-file-name').innerText = '';
                         // 隐藏代码删除按钮
                         document.getElementById('code-delete-btn').style.display = 'none';
+                        document.getElementById('code-info').style.display = 'none';
                     }
-                    
-                    // 清除参考图片文件名显示
-                    document.getElementById('file-name').innerText = '';
-                    // 隐藏参考图片删除按钮
-                    document.getElementById('ref-image-delete-btn').style.display = 'none';
-                    
+
+                    // 回填参考图片信息
+                    const uploadedImageName = data.uploaded_image_name || '';
+                    const originalImageName = data.original_image_name || uploadedImageName;
+                    const imageNameElement = document.getElementById('file-name');
+                    const imageInfoElement = document.getElementById('image-info');
+                    if (uploadedImageName) {
+                        imageNameElement.innerText = originalImageName;
+                        imageNameElement.classList.add('clickable');
+                        imageNameElement.onclick = function(event) {
+                            previewHistoryImage(uploadedImageName, event);
+                        };
+                        document.getElementById('ref-image-delete-btn').style.display = 'flex';
+                        if (imageInfoElement) {
+                            imageInfoElement.style.display = 'flex';
+                        }
+                    } else {
+                        imageNameElement.innerText = '';
+                        imageNameElement.classList.remove('clickable');
+                        imageNameElement.onclick = null;
+                        document.getElementById('ref-image-delete-btn').style.display = 'none';
+                        if (imageInfoElement) {
+                            imageInfoElement.style.display = 'none';
+                        }
+                    }
+
                     // 处理Reference Preview数据 - 存储到sessionStorage供result.html使用
                     if (data.reference_preview && data.reference_preview.has_json) {
                         console.log('Found reference preview data in history:', data.reference_preview);
@@ -616,22 +690,24 @@
                         // 清除之前的Reference Preview数据
                         sessionStorage.removeItem('reference_preview_data');
                     }
-                    
-                    // 如果有结果，在新标签页中打开结果页面
-                    if (data.chart_img || data.vis_code) {
-                        // 创建一个带有历史记录数据的URL
-                        const resultUrl = `/result?db_name=${encodeURIComponent(data.db_name)}&nl_query=${encodeURIComponent(data.nl_query)}`;
-                        
-                        // 在新标签页中打开结果页面
-                        window.open(resultUrl, '_blank');
-                        
-                        showToast('Opened result in a new tab', 'success');
+
+                    if (data.is_working && data.session_id) {
+                        const resultUrl = buildResultUrl(data.session_id, data.db_name, data.nl_query, data.time);
+                        showToast('Reopening active generation...', 'info');
+                        window.location.assign(resultUrl);
+                        return;
                     }
-                    
+
+                    // 如果有结果，在新标签页中打开结果页面
+                    if (data.chart_img || data.vis_code || data.chart_json) {
+                        const resultUrl = `/result?db_name=${encodeURIComponent(data.db_name)}&nl_query=${encodeURIComponent(data.nl_query)}&time=${encodeURIComponent(data.time || '')}`;
+
+                        showToast('Opening saved result...', 'success');
+                        window.location.assign(resultUrl);
+                    }
+
                     showToast('History loaded successfully', 'success');
-                    
-                    // 滚动到表单区域
-                    document.querySelector('.form-section').scrollIntoView({ behavior: 'smooth' });
+
                 } else {
                     showToast('Failed to load history item.', 'error');
                 }
@@ -641,77 +717,100 @@
                 showToast('Error loading history item.', 'error');
             });
     }
-    
+
+    function buildResultUrl(sessionId, dbName, nlQuery, historyTime) {
+        const params = new URLSearchParams();
+        params.set('session_id', sessionId);
+        params.set('db_name', dbName || '');
+        params.set('nl_query', nlQuery || '');
+        if (historyTime) {
+            params.set('time', historyTime);
+        }
+        return `/result?${params.toString()}`;
+    }
+
+    function reopenPendingPreview(item) {
+        const sessionId = item?.dataset?.sessionId || '';
+        const dbName = item?.dataset?.dbName || '';
+        const nlQuery = item?.dataset?.query || '';
+        const historyTime = item?.dataset?.historyTime || '';
+        if (!sessionId) {
+            showToast('Session is still starting. Try again in a moment.', 'info');
+            return;
+        }
+        window.location.assign(buildResultUrl(sessionId, dbName, nlQuery, historyTime));
+    }
+
     // 打开图片模态框
     function openImageModal(imageSrc) {
         const modal = document.getElementById('imageModal');
         const modalImage = document.getElementById('modalImage');
-        
+
         modalImage.src = imageSrc;
         modal.classList.add('active');
-        
+
         // 重置缩放状态
         currentZoom = 1;
         updateImageZoom();
-        
+
         // 阻止页面滚动
         document.body.style.overflow = 'hidden';
-        
+
         // 添加ESC键关闭功能
         document.addEventListener('keydown', handleEscapeKey);
-        
+
         // 添加鼠标滚轮缩放功能
         modal.addEventListener('wheel', handleImageZoom, { passive: false });
     }
-    
+
     // 关闭图片模态框
     function closeModalDirectly(event) {
         if (event) {
             event.stopPropagation();
         }
-        
+
         const modal = document.getElementById('imageModal');
         modal.classList.remove('active');
-        
+
         // 恢复页面滚动
         document.body.style.overflow = '';
-        
+
         // 移除事件监听器
         document.removeEventListener('keydown', handleEscapeKey);
         modal.removeEventListener('wheel', handleImageZoom);
     }
-    
+
     // 处理图片模态框点击关闭
     function closeImageModal(event) {
         // 如果点击的是图片本身或关闭按钮，不关闭模态框
         if (event && (
-            event.target.tagName === 'IMG' || 
+            event.target.tagName === 'IMG' ||
             event.target.closest('.image-modal-close')
         )) {
             return;
         }
-        
+
         // 点击背景区域关闭模态框
         closeModalDirectly();
     }
-    
+
     // 处理ESC键关闭
     function handleEscapeKey(event) {
         if (event.key === 'Escape') {
             closeModalDirectly();
         }
     }
-    
+
     // 更新图片缩放
     function updateImageZoom() {
         const modalImage = document.getElementById('modalImage');
         modalImage.style.transform = `scale(${currentZoom})`;
     }
-    
+
     // 处理鼠标滚轮缩放
     function handleImageZoom(event) {
         event.preventDefault();
-        
+
         // 根据滚轮方向调整缩放级别
         if (event.deltaY < 0) {
             // 向上滚动，放大
@@ -720,16 +819,16 @@
             // 向下滚动，缩小
             currentZoom = Math.max(currentZoom / 1.1, minZoom);
         }
-        
+
         updateImageZoom();
     }
-    
+
     // 删除已上传的文件
     function deleteUploadedFile(fileType, showToastMessage = true) {
         console.log('Deleting uploaded file:', fileType);
         // 确定要清除的元素ID
         let textareaId, fileInputId, fileNameSpanId, deleteButtonId;
-        
+
         if (fileType === 'code') {
             textareaId = 'code';
             fileInputId = 'code_file';
@@ -745,8 +844,12 @@
             fileInputId = 'ref_image';
             fileNameSpanId = 'file-name';
             deleteButtonId = 'ref-image-delete-btn';
+            const benchmarkImageUrl = document.getElementById('benchmark_ref_image_url');
+            if (benchmarkImageUrl) benchmarkImageUrl.value = '';
+            const benchmarkImageName = document.getElementById('benchmark_ref_image_name');
+            if (benchmarkImageName) benchmarkImageName.value = '';
         }
-        
+
         // 清除文件输入
         if (fileInputId) {
             const fileInput = document.getElementById(fileInputId);
@@ -754,7 +857,7 @@
                 fileInput.value = '';
             }
         }
-        
+
         // 清除textarea内容
         if (textareaId) {
             const textarea = document.getElementById(textareaId);
@@ -762,7 +865,7 @@
                 textarea.value = '';
             }
         }
-        
+
         // 清除文件名显示
         if (fileNameSpanId) {
             const fileNameElement = document.getElementById(fileNameSpanId);
@@ -771,7 +874,7 @@
                 fileNameElement.style.display = 'none';
             }
         }
-        
+
         // 隐藏删除按钮
         if (deleteButtonId) {
             const deleteButton = document.getElementById(deleteButtonId);
@@ -779,18 +882,22 @@
                 deleteButton.style.display = 'none';
             }
         }
-        
+
         // 隐藏代码信息区域
         if (fileType === 'code') {
             document.getElementById('code-info').style.display = 'none';
+            setReferenceBadge('code-source-badge', '', false);
         }
-        
+        if (fileType === 'ref_image') {
+            setReferenceBadge('image-source-badge', '', false);
+        }
+
         // 显示提示信息
         if (showToastMessage) {
             showToast('File removed', 'info');
         }
     }
-    
+
     // 显示提示信息
     function showToast(msg, type) {
         var toast = document.createElement('div');
@@ -798,7 +905,7 @@
         toast.style.position = 'fixed';
         toast.style.left = '50%';
         toast.style.transform = 'translateX(-50%)';
-        
+
         // 根据类型设置不同的背景色
         if (type === 'success') {
             toast.style.background = 'linear-gradient(135deg, #10b981, #059669)';
@@ -807,7 +914,7 @@
         } else if (type === 'info') {
             toast.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
         }
-        
+
         toast.style.color = '#fff';
         toast.style.padding = '1rem 2rem';
         toast.style.borderRadius = '12px';
@@ -816,14 +923,14 @@
         toast.style.bottom = '2rem';
         toast.style.fontWeight = '500';
         toast.style.textAlign = 'center';
-        
+
         document.body.appendChild(toast);
-        
+
         // 2秒后移除toast
         setTimeout(function() {
             toast.style.opacity = '0';
             toast.style.transition = 'opacity 0.5s ease';
-            
+
             setTimeout(function() {
                 document.body.removeChild(toast);
             }, 500);
@@ -834,7 +941,7 @@
         * {
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             margin: 0; padding: 0;
@@ -842,43 +949,43 @@
             min-height: 100vh;
             color: #1a1a1a;
         }
-        
+
         .layout {
             display: flex; min-height: 100vh;
             backdrop-filter: blur(10px);
         }
-        
+
         .sidebar {
-            width: 380px; 
-            background: rgba(17, 24, 39, 0.95); 
+            width: 380px;
+            background: rgba(17, 24, 39, 0.95);
             color: #fff;
             padding: 2rem 1.5rem;
-            display: flex; 
+            display: flex;
             flex-direction: column;
             backdrop-filter: blur(20px);
             border-right: 1px solid rgba(255, 255, 255, 0.1);
             min-height: 100vh;
         }
-        
+
         .sidebar-title {
-            font-size: 1.5rem; 
-            font-weight: 700; 
-            margin-bottom: 0.5rem; 
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
             text-align: center;
             background: linear-gradient(135deg, #667eea, #764ba2);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-        
+
         .sidebar-desc {
-            font-size: 0.875rem; 
-            color: #9ca3af; 
-            margin-bottom: 1.5rem; 
+            font-size: 0.875rem;
+            color: #9ca3af;
+            margin-bottom: 1.5rem;
             text-align: center;
             line-height: 1.5;
         }
-        
+
         /* 边栏切换按钮样式 */
         .sidebar-toggle-btn {
             position: absolute;
@@ -897,22 +1004,22 @@
             transition: all 0.2s;
             z-index: 10;
         }
-        
+
         .sidebar-toggle-btn.close-btn {
             background: linear-gradient(135deg, #3b82f6, #1d4ed8);
             color: #fff;
             z-index: 1000; /* 确保按钮在最上层 */
             cursor: pointer;
         }
-        
+
         .sidebar-toggle-btn:hover {
             background: rgba(75, 85, 99, 0.6);
         }
-        
+
         .sidebar-toggle-btn.close-btn:hover {
             background: linear-gradient(135deg, #2563eb, #1e40af);
         }
-        
+
         .open-sidebar-btn {
             position: fixed;
             left: 10px;
@@ -930,91 +1037,91 @@
             z-index: 100;
             transition: all 0.2s;
         }
-        
+
         .open-sidebar-btn:hover {
             background: linear-gradient(135deg, #2563eb, #1e40af);
         }
-        
+
         /* 边栏折叠状态 */
         .layout.sidebar-collapsed .sidebar {
             margin-left: -380px;
         }
-        
+
         .layout.sidebar-collapsed .open-sidebar-btn {
             display: flex;
         }
-        
+
         .layout.sidebar-collapsed .main {
             margin-left: 0;
         }
-        
+
         /* 边栏标题相对定位，以便放置关闭按钮 */
         .sidebar-title {
             position: relative;
         }
-        
+
         .clear-btn {
             background: linear-gradient(135deg, #ef4444, #dc2626);
-            color: #fff; 
-            border: none; 
+            color: #fff;
+            border: none;
             border-radius: 12px;
-            padding: 0.75rem 1rem; 
-            font-size: 0.875rem; 
-            cursor: pointer; 
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+            cursor: pointer;
             margin-bottom: 1.5rem;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            width: 100%; 
+            width: 100%;
             font-weight: 600;
-            display: flex; 
-            align-items: center; 
+            display: flex;
+            align-items: center;
             justify-content: center;
             gap: 0.5rem;
             box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3);
         }
-        
-        .clear-btn:hover { 
+
+        .clear-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
         }
-        
+
         .new-generation-btn {
             background: linear-gradient(135deg, #10b981, #059669);
-            color: #fff; 
-            border: none; 
+            color: #fff;
+            border: none;
             border-radius: 12px;
-            padding: 0.75rem 1rem; 
-            font-size: 0.875rem; 
-            cursor: pointer; 
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+            cursor: pointer;
             margin-bottom: 1.5rem;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            width: 100%; 
+            width: 100%;
             font-weight: 600;
-            display: flex; 
-            align-items: center; 
+            display: flex;
+            align-items: center;
             justify-content: center;
             gap: 0.5rem;
             box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
         }
-        
-        .new-generation-btn:hover { 
+
+        .new-generation-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
         }
-        
+
         .history-list {
-            flex: 1; 
+            flex: 1;
             overflow-y: auto;
         }
-        
+
         .history-item {
-            background: rgba(55, 65, 81, 0.8); 
-            border-radius: 16px; 
-            padding: 1.25rem; 
-            margin-bottom: 1rem; 
+            background: rgba(55, 65, 81, 0.8);
+            border-radius: 16px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
             font-size: 0.875rem;
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            opacity: 0; 
+            opacity: 0;
             animation: fadeInUp 0.6s forwards;
             transition: all 0.3s ease;
             cursor: pointer;
@@ -1022,85 +1129,85 @@
             align-items: flex-start;
             justify-content: space-between;
         }
-        
+
         .history-item:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
             background: rgba(75, 85, 99, 0.9);
         }
-        
+
         .history-item.active {
             background: rgba(102, 126, 234, 0.3);
             border-color: rgba(102, 126, 234, 0.5);
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
-        
-        @keyframes fadeInUp { 
-            from { 
-                opacity: 0; 
-                transform: translateY(20px); 
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
             }
-            to { 
-                opacity: 1; 
-                transform: translateY(0); 
-            } 
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
-        
-        .history-db { 
-            font-weight: 600; 
-            color: #60a5fa; 
-            font-size: 0.875rem; 
+
+        .history-db {
+            font-weight: 600;
+            color: #60a5fa;
+            font-size: 0.875rem;
             margin-bottom: 0.5rem;
         }
-        
-        .history-time { 
-            color: #fbbf24; 
-            font-size: 0.75rem; 
+
+        .history-time {
+            color: #fbbf24;
+            font-size: 0.75rem;
             margin-bottom: 0.5rem;
             opacity: 0.8;
         }
-        
-        .history-query { 
-            color: #f3f4f6; 
+
+        .history-query {
+            color: #f3f4f6;
             line-height: 1.4;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        
-        .history-image { 
-            color: #a78bfa; 
-            font-size: 0.75rem; 
+
+        .history-image {
+            color: #a78bfa;
+            font-size: 0.75rem;
             margin-top: 0.5rem;
             opacity: 0.9;
         }
-        
+
         .uploaded-image-name {
             margin-left: 0.5rem;
             transition: all 0.3s ease;
         }
-        
+
         .uploaded-image-name.clickable {
             cursor: pointer;
             text-decoration: underline;
         }
-        
+
         .uploaded-image-name.clickable:hover {
             color: #c4b5fd;
             transform: translateY(-1px);
         }
-        
+
         .history-content {
             flex: 1;
             min-width: 0;
         }
-        
+
         .history-actions {
             flex: 0 0 auto;
             margin-left: 0.75rem;
             margin-top: 0.25rem;
         }
-        
+
         .history-delete-btn {
             background: linear-gradient(135deg, #ef4444, #dc2626);
             color: #fff;
@@ -1117,18 +1224,18 @@
             opacity: 0.6;
             box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
         }
-        
+
         .history-delete-btn:hover {
             opacity: 1;
             background: linear-gradient(135deg, #dc2626, #b91c1c);
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
         }
-        
+
         .history-item:hover .history-delete-btn {
             opacity: 0.9;
         }
-        
+
         /* Processing Status 样式 - 右上角固定位置 */
         .progress-overlay {
             position: fixed;
@@ -1137,7 +1244,7 @@
             z-index: 9999;
             pointer-events: none;
         }
-        
+
         .progress-status {
             position: relative;
             width: 300px;
@@ -1151,7 +1258,7 @@
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
             pointer-events: auto;
         }
-        
+
         .progress-title {
             font-size: 1.125rem;
             font-weight: 700;
@@ -1163,7 +1270,7 @@
             gap: 0.5rem;
             text-align: center;
         }
-        
+
         .progress-content {
             background: rgba(31, 41, 55, 0.9);
             border-radius: 12px;
@@ -1178,63 +1285,63 @@
             white-space: pre-wrap;
             word-wrap: break-word;
         }
-        
+
         .progress-content::-webkit-scrollbar {
             width: 4px;
         }
-        
+
         .progress-content::-webkit-scrollbar-track {
             background: rgba(31, 41, 55, 0.5);
             border-radius: 2px;
         }
-        
+
         .progress-content::-webkit-scrollbar-thumb {
             background: rgba(156, 163, 175, 0.5);
             border-radius: 2px;
         }
-        
+
         .progress-content::-webkit-scrollbar-thumb:hover {
             background: rgba(156, 163, 175, 0.7);
         }
-        
+
         .main {
-            flex: 1; 
-            padding: 0; 
-            display: flex; 
+            flex: 1;
+            padding: 0;
+            display: flex;
             flex-direction: column;
             background: transparent;
         }
-        
+
         .main-inner {
-            max-width: 2200px; 
-            margin: 0 auto; 
-            padding: 3rem 2rem; 
+            max-width: 2200px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
             width: 100%;
         }
-        
+
         .main-title {
-            font-size: 3.2rem; 
-            font-weight: 700; 
-            color: #fff; 
+            font-size: 3.2rem;
+            font-weight: 700;
+            color: #fff;
             margin-bottom: 1.5rem;
-            text-align: center; 
+            text-align: center;
             letter-spacing: -0.025em;
             text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
-        
+
         .main-desc {
-            font-size: 1.125rem; 
-            color: rgba(255, 255, 255, 0.8); 
-            margin-bottom: 3rem; 
+            font-size: 1.125rem;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 3rem;
             text-align: center;
             line-height: 1.6;
         }
-        
+
         .form-section {
-            background: rgba(255, 255, 255, 0.95); 
-            border-radius: 24px; 
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 24px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
-            padding: 2.5rem; 
+            padding: 2.5rem;
             margin-bottom: 2rem;
             backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -1244,7 +1351,7 @@
             margin-right: auto;
             width: 95%;
         }
-        
+
         .form-grid {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
@@ -1255,18 +1362,18 @@
             margin-left: auto;
             margin-right: auto;
         }
-        
+
         .form-row-single {
             grid-column: 1 / -1;
         }
-        
+
         .form-row-third {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 2rem;
             grid-column: 1 / -1;
         }
-        
+
         .form-row-single {
             display: grid;
             grid-template-columns: 1fr;
@@ -1277,19 +1384,19 @@
             margin-left: auto;
             margin-right: auto;
         }
-        
+
         .results-layout {
             display: flex;
             gap: 2.5rem;
             margin-bottom: 0;
             width: 100%;
         }
-        
+
         .chart-container {
             flex: 2; /* 占据左侧2/3的空间 */
             min-width: 0; /* 确保flex item可以缩小到小于内容宽度 */
         }
-        
+
         .right-column {
             flex: 1; /* 占据右侧1/3的空间 */
             display: flex;
@@ -1297,150 +1404,150 @@
             gap: 2.5rem;
             min-width: 0; /* 确保flex item可以缩小到小于内容宽度 */
         }
-        
+
         .code-container {
             flex: 1;
             min-height: 0; /* 确保flex item可以缩小到小于内容高度 */
             display: flex;
             flex-direction: column;
         }
-        
+
         .eval-container-wrapper {
             flex: 1;
             min-height: 0; /* 确保flex item可以缩小到小于内容高度 */
             display: flex;
             flex-direction: column;
         }
-        
+
         .result-item {
-            background: rgba(255, 255, 255, 0.95); 
-            border-radius: 24px; 
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 24px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
-            padding: 2.5rem; 
+            padding: 2.5rem;
             backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            opacity: 0; 
+            opacity: 0;
             animation: fadeInUp 0.8s 0.2s forwards;
             display: flex;
             flex-direction: column;
             min-width: 0; /* 防止内容撑开容器 */
             width: 100%; /* 确保填满grid列宽度 */
         }
-        
+
         .form-label {
-            font-size: 0.875rem; 
-            font-weight: 600; 
-            margin-top: 0; 
-            margin-bottom: 0.5rem; 
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
             color: #374151;
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
-        
+
         .form-group {
             display: flex;
             flex-direction: column;
         }
-        
+
         .form-input, .form-textarea, .form-select {
-            width: 100%; 
-            padding: 1rem; 
-            font-size: 1rem; 
-            border: 2px solid #e5e7eb; 
-            border-radius: 12px; 
+            width: 100%;
+            padding: 1rem;
+            font-size: 1rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
             margin-bottom: 1rem;
-            background: rgba(255, 255, 255, 0.8); 
+            background: rgba(255, 255, 255, 0.8);
             transition: all 0.3s ease;
             font-family: 'Inter', sans-serif;
         }
-        
-        .form-input:focus, .form-textarea:focus, .form-select:focus { 
-            border-color: #667eea; 
-            outline: none; 
+
+        .form-input:focus, .form-textarea:focus, .form-select:focus {
+            border-color: #667eea;
+            outline: none;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
             background: #fff;
         }
-        
-        .form-textarea { 
+
+        .form-textarea {
             min-height: 140px; /* 减小高度 */
-            resize: vertical; 
+            resize: vertical;
         }
-        
+
         .generate-btn {
-            padding: 1rem 2rem; 
-            background: linear-gradient(135deg, #667eea, #764ba2); 
-            color: #fff; 
-            border: none; 
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            border: none;
             border-radius: 12px;
-            font-size: 1rem; 
-            cursor: pointer; 
+            font-size: 1rem;
+            cursor: pointer;
             font-weight: 600;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
             gap: 0.5rem;
             box-shadow: 0 4px 14px rgba(102, 126, 234, 0.3);
             flex: 1;
         }
-        
-        .generate-btn:hover { 
+
+        .generate-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
         }
-        
+
         .result-section {
-            background: rgba(255, 255, 255, 0.95); 
-            border-radius: 24px; 
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 24px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
-            padding: 2.5rem; 
+            padding: 2.5rem;
             margin-bottom: 0;
             backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            opacity: 0; 
+            opacity: 0;
             animation: fadeInUp 0.8s 0.2s forwards;
         }
-        
+
         .result-title {
-            font-size: 1.25rem; 
-            font-weight: 700; 
-            color: #1f2937; 
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1f2937;
             margin-bottom: 1rem;
-            display: flex; 
-            align-items: center; 
+            display: flex;
+            align-items: center;
             justify-content: space-between;
             min-height: 2rem; /* 确保所有标题行高度一致 */
         }
-        
+
         .copy-btn {
-            background: linear-gradient(135deg, #10b981, #059669); 
-            color: #fff; 
-            border: none; 
-            border-radius: 10px; 
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
             padding: 0.5rem 1rem;
-            font-size: 0.875rem; 
-            cursor: pointer; 
-            margin-left: 1rem; 
+            font-size: 0.875rem;
+            cursor: pointer;
+            margin-left: 1rem;
             font-weight: 600;
-            display: flex; 
-            align-items: center; 
+            display: flex;
+            align-items: center;
             gap: 0.5rem;
             transition: all 0.3s ease;
             box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
         }
-        
-        .copy-btn:hover { 
+
+        .copy-btn:hover {
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
         }
-        
+
         .generated-code {
-            background: #1f2937; 
-            border-radius: 12px; 
-            padding: 1.5rem; 
+            background: #1f2937;
+            border-radius: 12px;
+            padding: 1.5rem;
             color: #f3f4f6;
-            font-family: 'JetBrains Mono', 'Fira Code', monospace; 
-            height: 1000px; 
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            height: 1000px;
             max-height: 1000px; /* 确保最大高度限制 */
             white-space: pre; /* 支持水平滚动，不自动换行 */
             font-size: 0.875rem;
@@ -1451,20 +1558,20 @@
             flex: 1;
             margin: 0;
         }
-        
+
         /* 右侧代码区域高度调整 */
         .code-container .generated-code {
             height: 400px; /* 右侧代码区域高度减小 */
             max-height: 400px;
         }
-        
+
         /* 右侧评估结果区域高度调整 */
         .eval-container-wrapper .eval-container {
             height: 400px;
             max-height: 400px;
         }
 
-        
+
         /* 为语法高亮代码块定制样式 */
         .syntax-highlighted {
             background: transparent !important;
@@ -1478,7 +1585,7 @@
             overflow: visible !important;
             vertical-align: top !important;
         }
-        
+
         /* 覆盖Prism主题的背景色以匹配我们的深色主题 */
         pre[class*="language-"] {
             background: transparent !important;
@@ -1487,13 +1594,13 @@
             margin: 0 !important;
             padding: 0 !important;
         }
-        
+
         code[class*="language-"] {
             background: transparent !important;
             color: #f3f4f6 !important;
             text-shadow: none !important;
         }
-        
+
         /* Chart区域特殊样式 - 当显示图片时 */
         #chartArea img {
             max-width: 100%;
@@ -1502,7 +1609,7 @@
             display: block;
             margin: 0 auto;
         }
-        
+
         /* Chart区域在显示图片时的样式调整 */
         #chartArea.has-image {
             display: flex;
@@ -1515,7 +1622,7 @@
             overflow-x: auto; /* 图片过宽时允许水平滚动 */
             white-space: nowrap; /* 防止图片换行 */
         }
-        
+
         /* 交互式图表样式 */
         #chartArea.has-interactive-chart {
             display: flex;
@@ -1528,14 +1635,14 @@
             overflow-y: auto;
             overflow-x: auto;
         }
-        
+
         /* Vega-Embed容器样式 */
         #vis {
             width: 100%;
             min-height: 600px;
             margin: 0 auto;
         }
-        
+
         /* 加载指示器样式 */
         .loading {
             display: flex;
@@ -1546,7 +1653,7 @@
             font-size: 1.2rem;
             color: #666;
         }
-        
+
         /* 错误消息样式 */
         .error-message {
             padding: 15px;
@@ -1556,7 +1663,7 @@
             color: #721c24;
             margin: 10px 0;
         }
-        
+
         /* 图像放大查看器样式 */
         #imageViewer {
             display: flex;
@@ -1567,7 +1674,7 @@
             max-height: 1000px;
             overflow: hidden; /* 避免双重滚动条 */
         }
-        
+
         #chartArea.has-interactive-chart #vis {
             width: 100%;
             height: 100%;
@@ -1575,14 +1682,14 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         /* Vega-Embed容器样式 */
         .vega-embed {
             width: 100%;
             height: 100%;
             position: relative;
         }
-        
+
         /* 错误消息样式 */
         .error-message {
             color: #ef4444;
@@ -1593,13 +1700,13 @@
             margin: 1rem;
             font-family: 'Inter', sans-serif;
         }
-        
+
         /* 左侧Chart区域高度调整 */
         .chart-container .generated-code {
             height: 850px; /* 左侧Chart区域高度增加 */
             max-height: 850px;
         }
-        
+
         .custom-file-label {
             display: inline-flex;
             align-items: center;
@@ -1614,14 +1721,14 @@
             transition: all 0.3s ease;
             gap: 0.5rem;
         }
-        
+
         .custom-file-label:hover {
             background: #fff;
             border-color: #667eea;
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
         }
-        
+
         /* Add Code 按钮样式 */
         .add-code-btn {
             display: inline-flex;
@@ -1637,20 +1744,20 @@
             transition: all 0.3s ease;
             gap: 0.5rem;
         }
-        
+
         .add-code-btn:hover {
             background: #fff;
             border-color: #667eea;
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
         }
-        
+
         /* 下拉菜单样式 */
         .dropdown {
             position: relative;
             display: inline-block;
         }
-        
+
         .dropdown-content {
             display: none;
             position: absolute;
@@ -1668,7 +1775,7 @@
         .dropdown-content.show {
             display: block;
         }
-        
+
         .dropdown-content a {
             color: #374151;
             padding: 0.75rem 1rem;
@@ -1679,16 +1786,16 @@
             font-size: 0.875rem;
             transition: all 0.2s ease;
         }
-        
+
         .dropdown-content a:hover {
             background-color: rgba(102, 126, 234, 0.1);
             color: #667eea;
         }
-        
+
         .dropdown:hover .dropdown-content {
             display: block;
         }
-        
+
         /* 代码信息样式 */
         .code-info {
             margin-top: 0.75rem;
@@ -1701,17 +1808,17 @@
             align-items: center;
             gap: 0.5rem;
         }
-        
+
         .code-label {
             font-weight: 600;
         }
-        
+
         .code-actions {
             display: flex;
             align-items: center;
             gap: 0.75rem;
         }
-        
+
         #file-name, #db-file-name, #ref-code-file-name, #mod-code-file-name {
             margin-left: 0.75rem;
             color: #6b7280;
@@ -1720,7 +1827,7 @@
             display: block;
             margin-top: 0.5rem;
         }
-        
+
         /* 文件名可点击样式 */
         #file-name.clickable, #db-file-name.clickable {
             color: #667eea;
@@ -1728,12 +1835,12 @@
             text-decoration: underline;
             transition: all 0.3s ease;
         }
-        
+
         #file-name.clickable:hover, #db-file-name.clickable:hover {
             color: #4f46e5;
             transform: translateY(-1px);
         }
-        
+
         /* 模态框样式 */
         .modal {
             display: none;
@@ -1747,7 +1854,7 @@
             background-color: rgba(0, 0, 0, 0.4);
             animation: fadeIn 0.3s;
         }
-        
+
         .modal-content {
             background-color: #fefefe;
             margin: 10% auto;
@@ -1759,7 +1866,7 @@
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             animation: slideIn 0.3s;
         }
-        
+
         .modal-header {
             display: flex;
             justify-content: space-between;
@@ -1770,17 +1877,17 @@
             border-top-left-radius: 8px;
             border-top-right-radius: 8px;
         }
-        
+
         .modal-title {
             font-weight: 600;
             font-size: 18px;
             color: #333;
         }
-        
+
         .modal-body {
             padding: 15px 20px;
         }
-        
+
         .close {
             color: #aaa;
             font-size: 28px;
@@ -1788,27 +1895,27 @@
             cursor: pointer;
             line-height: 1;
         }
-        
+
         .close:hover {
             color: #333;
         }
-        
+
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
         }
-        
+
         @keyframes slideIn {
             from { transform: translateY(-50px); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
         }
-        
+
         .file-upload-row {
             display: flex;
             align-items: center;
             gap: 0.75rem;
         }
-        
+
         .delete-file-btn {
             background: linear-gradient(135deg, #ef4444, #dc2626);
             color: #fff;
@@ -1824,39 +1931,39 @@
             transition: all 0.3s ease;
             box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
         }
-        
+
         .delete-file-btn:hover {
             background: linear-gradient(135deg, #dc2626, #b91c1c);
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
         }
-        
+
         .button-row {
             display: flex;
             gap: 1rem;
             margin-top: 1.5rem;
             align-items: flex-end;
         }
-        
+
         .model-selection {
             display: flex;
             flex-direction: column;
             min-width: 200px;
         }
-        
+
         .model-selection .form-label {
             font-size: 0.875rem;
             font-weight: 500;
             color: #374151;
             margin-bottom: 0.5rem;
         }
-        
+
         .model-selection .form-select {
             margin-bottom: 0;
             padding: 0.75rem;
             font-size: 0.875rem;
         }
-        
+
         .clear-uploads-btn {
             padding: 1rem 2rem;
             background: linear-gradient(135deg, #f59e0b, #d97706);
@@ -1874,30 +1981,30 @@
             box-shadow: 0 4px 14px rgba(245, 158, 11, 0.3);
             flex: 0 0 auto;
         }
-        
+
         .clear-uploads-btn:hover {
             background: linear-gradient(135deg, #d97706, #b45309);
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
         }
-        
 
-        
+
+
         /* 滚动条美化 */
-        ::-webkit-scrollbar { 
-            width: 6px; 
-            background: transparent; 
+        ::-webkit-scrollbar {
+            width: 6px;
+            background: transparent;
         }
-        
-        ::-webkit-scrollbar-thumb { 
-            background: rgba(255, 255, 255, 0.2); 
-            border-radius: 3px; 
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
         }
-        
-        ::-webkit-scrollbar-thumb:hover { 
-            background: rgba(255, 255, 255, 0.3); 
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
-        
+
         /* 图片放大模态框样式 */
         .image-modal {
             display: none;
@@ -1910,13 +2017,13 @@
             background-color: rgba(0, 0, 0, 0.9);
             backdrop-filter: blur(10px);
         }
-        
+
         .image-modal.active {
             display: flex;
             align-items: center;
             justify-content: center;
         }
-        
+
         /* 代码输入模态框样式 */
         .modal {
             display: none;
@@ -1931,11 +2038,11 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         .modal.active {
             display: flex;
         }
-        
+
         .modal-content {
             background: #fff;
             border-radius: 16px;
@@ -1946,7 +2053,7 @@
             flex-direction: column;
             overflow: hidden;
         }
-        
+
         .modal-header {
             display: flex;
             justify-content: space-between;
@@ -1956,7 +2063,7 @@
             border-bottom: 1px solid #e5e7eb;
             color: #111827;
         }
-        
+
         .modal-header h3 {
             margin: 0;
             color: #111827;
@@ -1965,7 +2072,7 @@
             align-items: center;
             gap: 0.5rem;
         }
-        
+
         .modal-close {
             background: none;
             border: none;
@@ -1978,19 +2085,19 @@
             justify-content: center;
             transition: all 0.2s ease;
         }
-        
+
         .modal-close:hover {
             color: #ef4444;
             transform: scale(1.1);
         }
-        
+
         .modal-body {
             padding: 1.5rem;
             flex: 1;
             overflow-y: auto;
             background: linear-gradient(180deg, #ffffff, #faf5ff 40%, #eef2ff 100%);
         }
-        
+
         .modal-footer {
             display: flex;
             justify-content: flex-end;
@@ -1999,7 +2106,7 @@
             background: #f9fafb;
             border-top: 1px solid #e5e7eb;
         }
-        
+
         .cancel-btn {
             padding: 0.75rem 1.25rem;
             background: #f3f4f6;
@@ -2011,11 +2118,11 @@
             cursor: pointer;
             transition: all 0.2s ease;
         }
-        
+
         .cancel-btn:hover {
             background: #e5e7eb;
         }
-        
+
         .confirm-btn {
             padding: 0.75rem 1.25rem;
             background: linear-gradient(135deg, #667eea, #764ba2);
@@ -2027,13 +2134,13 @@
             cursor: pointer;
             transition: all 0.2s ease;
         }
-        
+
         .confirm-btn:hover {
             background: linear-gradient(135deg, #5a72ea, #6b40a9);
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
         }
-        
+
         .code-input-area {
             width: 100%;
             min-height: 300px;
@@ -2045,13 +2152,13 @@
             line-height: 1.6;
             resize: vertical;
         }
-        
+
         .code-input-area:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
-        
+
         .image-modal-content {
             position: relative;
             max-width: 90%;
@@ -2060,7 +2167,7 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         .image-modal img {
             max-width: 100%;
             max-height: 100%;
@@ -2070,7 +2177,7 @@
             cursor: default;
         }
 
-        
+
         /* 图片缩放控制按钮样式 */
         .image-zoom-controls {
             position: fixed;
@@ -2081,7 +2188,7 @@
             z-index: 10001;
             transition: all 0.3s ease;
         }
-        
+
         .image-zoom-btn {
             background: rgba(255, 255, 255, 0.9);
             color: #1a1a1a;
@@ -2099,19 +2206,19 @@
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
             backdrop-filter: blur(10px);
         }
-        
+
         .image-zoom-btn:hover {
             background: #fff;
             transform: scale(1.1);
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
         }
-        
+
         .image-zoom-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
         }
-        
+
         .image-modal-close {
             position: fixed;
             top: 20px;
@@ -2133,13 +2240,13 @@
             backdrop-filter: blur(10px);
             z-index: 10001;
         }
-        
+
         .image-modal-close:hover {
             background: #fff;
             transform: scale(1.1) rotate(90deg);
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
         }
-        
+
         /* 图片容器样式更新以支持缩放 */
         .image-modal img {
             max-width: 90vw;
@@ -2154,22 +2261,22 @@
             user-select: none;
             transform-origin: center center;
         }
-        
+
         .image-modal img:active {
             cursor: grabbing;
         }
-        
+
         /* Chart区域图片点击样式 */
         #chartArea img {
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        
+
         #chartArea img:hover {
             transform: scale(1.02);
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
         }
-        
+
         /* 评估结果悬停样式 */
         .eval-container {
             position: relative;
@@ -2177,7 +2284,7 @@
             display: flex;
             flex-direction: column;
         }
-        
+
         .eval-summary {
             background: #1f2937;
             border-radius: 12px;
@@ -2195,12 +2302,12 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         .eval-summary:hover {
             background: #2d3748;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
         }
-        
+
         .eval-details {
             position: absolute;
             top: 0;
@@ -2212,20 +2319,20 @@
             transition: all 0.3s ease;
             z-index: 5;
         }
-        
+
         .eval-container:hover .eval-details {
             opacity: 1;
             visibility: visible;
         }
-        
+
         .eval-passed {
             color: #10b981;
         }
-        
+
         .eval-failed {
             color: #ef4444;
         }
-        
+
         /* 迭代弹窗样式 */
 .iteration-popup {
     position: absolute;
@@ -2266,7 +2373,7 @@
     pointer-events: none;
     white-space: nowrap;
 }
-        
+
         @keyframes finalResultPopupShow {
             0% {
                 opacity: 0;
@@ -2285,49 +2392,49 @@
                 transform: translateX(20px) scale(0.9);
             }
         }
-        
+
         /* 响应式 */
         @media (max-width: 1900px) {
-            .main-inner { 
+            .main-inner {
                 max-width: 1800px;
-                padding: 3rem 1.5rem; 
+                padding: 3rem 1.5rem;
             }
         }
-        
+
         @media (max-width: 1600px) {
-            .main-inner { 
+            .main-inner {
                 max-width: 1500px;
-                padding: 3rem 1.5rem; 
+                padding: 3rem 1.5rem;
             }
         }
-        
+
         @media (max-width: 1200px) {
-            .main-inner { 
+            .main-inner {
                 max-width: 1200px;
-                padding: 2rem 1rem; 
+                padding: 2rem 1rem;
             }
-            .sidebar { 
-                width: 320px; 
+            .sidebar {
+                width: 320px;
             }
             .layout.sidebar-collapsed .sidebar {
                 margin-left: -320px;
             }
         }
-        
+
         @media (max-width: 768px) {
-            .layout { 
-                flex-direction: column; 
+            .layout {
+                flex-direction: column;
             }
-            .sidebar { 
-                width: 100%; 
-                min-width: 0; 
+            .sidebar {
+                width: 100%;
+                min-width: 0;
                 padding: 1.5rem 1rem;
             }
             .layout.sidebar-collapsed .sidebar {
                 margin-left: -100%;
             }
-            .main-inner { 
-                padding: 1.5rem 1rem; 
+            .main-inner {
+                padding: 1.5rem 1rem;
             }
             .main-title {
                 font-size: 2.5rem;
@@ -2339,7 +2446,7 @@
                 grid-template-columns: 1fr;
                 gap: 1rem;
             }
-            
+
             .form-row-single {
                 grid-template-columns: 1fr;
                 gap: 1rem;
@@ -2347,60 +2454,60 @@
             .form-row-third {
                 grid-template-columns: 1fr;
             }
-            
+
             /* 移动端结果布局调整 */
             .results-layout {
                 flex-direction: column;
                 gap: 1rem;
             }
-            
+
             .chart-container .generated-code {
                 height: 500px;
                 max-height: 500px;
             }
-            
+
             .code-container .generated-code,
             .eval-container-wrapper .eval-container {
                 height: 300px;
                 max-height: 300px;
             }
-            
+
             /* 移动端按钮位置已在主样式中统一处理 */
-            
+
             /* 移动端按钮布局调整 */
             .button-row {
                 flex-direction: column;
                 gap: 0.75rem;
                 align-items: stretch;
             }
-            
+
             .model-selection {
                 min-width: auto;
             }
-            
+
             .file-upload-row {
                 flex-direction: column;
                 align-items: flex-start;
                 gap: 0.5rem;
             }
-            
+
             .delete-file-btn {
                 align-self: flex-end;
             }
-            
+
             /* 移动端 Processing Status 调整 */
             .progress-overlay {
                 top: 0.5rem;
                 right: 1rem;
                 left: 1rem;
             }
-            
+
             .progress-status {
                 width: 100%;
                 max-width: 100%;
                 padding: 0.5rem;
             }
-            
+
             .progress-content {
                 max-height: 75px;
                 font-size: 0.75rem;
@@ -2547,13 +2654,14 @@
     </style>
 </head>
 <body>
+<div id="sidebarBackdrop" class="mv-sidebar-backdrop" aria-hidden="true"></div>
 <div class="layout">
     <div class="sidebar">
         <div class="sidebar-title">
             <i class="fa-solid fa-clock-rotate-left"></i> Generation History
         </div>
         <button id="closeSidebarBtn" class="sidebar-toggle-btn close-btn" title="Close Sidebar"><i class="fa-solid fa-angles-left"></i></button>
-        <div class="sidebar-desc">Your recent generated visualizing codes</div>
+        <div class="sidebar-desc" id="historySummary">Click a session to replay · {{ history|length if history else 0 }} sessions</div>
         <button class="new-generation-btn" id="newGenerationBtn" onclick="startNewGeneration()"><i class="fa-solid fa-plus"></i> NEW GENERATION</button>
         <form method="post" action="/clear_history" style="margin:0;padding:0;">
             <button class="clear-btn" type="submit"><i class="fa-solid fa-trash"></i> CLEAR HISTORY</button>
@@ -2561,20 +2669,32 @@
         <div class="history-list">
             {% if history and history|length > 0 %}
                 {% for item in history %}
-                <div class="history-item" onclick="loadHistoryItem(/* template */ {{ loop.index0 }})" data-index="{{ loop.index0 }}">
+                {% set thumb = item.results.get('chart_backup_name', '') if item.results else '' %}
+                {% set has_result = thumb or (item.results and (item.results.get('chart_json_backup_name') or item.results.get('vis_code'))) %}
+                <div class="history-item{% if not thumb %} no-thumb{% endif %}" onclick="loadHistoryItem({{ loop.index0 }})" data-index="{{ loop.index0 }}" style="--i: {{ loop.index0 }}">
+                    {% if thumb %}
+                    <div class="history-thumb-wrap" title="Replay this history result">
+                        <img class="history-thumb" src="/history/chart_result/{{ thumb }}" alt="Chart preview" loading="lazy">
+                    </div>
+                    {% endif %}
                     <div class="history-content">
-                        <div class="history-db"><i class="fa-solid fa-database"></i> Database: {{ item.db_name }}</div>
+                        <div class="history-db">
+                            <i class="fa-solid fa-database"></i> {{ item.db_name }}
+                            {% if has_result %}<span class="history-type-badge chart">Chart</span>{% elif item.status == 'error' %}<span class="history-type-badge pending">Error</span>{% else %}<span class="history-type-badge pending">Working</span>{% endif %}
+                            {% if item.uploaded_image_name %}<span class="history-type-badge image">Ref</span>{% endif %}
+                            <i class="fa-solid fa-arrow-up-right-from-square history-replay-icon" aria-hidden="true"></i>
+                        </div>
                         <div class="history-time"><i class="fa-regular fa-clock"></i> {{ item.time }}</div>
                         <div class="history-query"><i class="fa-solid fa-comment-dots"></i> {{ item.query }}</div>
                         {% if item.uploaded_image_name %}
                         <div class="history-image">
-                            <i class="fa-solid fa-image"></i> 
+                            <i class="fa-solid fa-image"></i>
                             <span class="uploaded-image-name clickable" onclick="previewHistoryImage('{{ item.uploaded_image_name }}', event)">{{ item.original_image_name or item.uploaded_image_name }}</span>
                         </div>
                         {% endif %}
                     </div>
                     <div class="history-actions">
-                        <button class="history-delete-btn" onclick="deleteHistoryItem(/* template */ {{ loop.index0 }}, event)" title="删除此记录">
+                        <button class="history-delete-btn" onclick="deleteHistoryItem({{ loop.index0 }}, event)" title="Delete entry" aria-label="Delete history entry">
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </div>
@@ -2585,13 +2705,91 @@
             {% endif %}
         </div>
     </div>
-    <button id="openSidebarBtn" class="open-sidebar-btn" title="Open Sidebar"><i class="fa-solid fa-angles-right"></i></button>
+    <button id="openSidebarBtn" class="open-sidebar-btn" type="button" title="Open history" aria-label="Open generation history">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        <span class="open-sidebar-label">History</span>
+    </button>
     <div class="main">
         <div class="main-inner">
             <div class="main-title"><i class="fa-solid fa-chart-line"></i> CROSS-MODAL DATA VISUALIZATION SYSTEM</div>
-            <div class="main-desc">Transform your natural language and optional information into visualizing codes with AI</div>
+            <div class="main-desc">Transform natural language, images, and code into interactive visualizations with AI</div>
+            <div class="mv-demo-banner">
+                <i class="fa-solid fa-sparkles"></i>
+                <span><strong>SIGMOD Demo</strong> — Sample database pre-loaded. Try a quick example below or replay a session from the left panel.</span>
+            </div>
+            <div class="mv-quick-row" id="quickExamples">
+                <button type="button" class="mv-chip db-chip" onclick="selectDemoDatabase('chinook_1.sqlite')"><i class="fa-solid fa-database"></i> Chinook</button>
+                <button type="button" class="mv-chip db-chip" onclick="selectDemoDatabase('activity_1.sqlite')"><i class="fa-solid fa-database"></i> Activity</button>
+                <button type="button" class="mv-chip" onclick="applyPromptIdea('image-campus-stacked')"><i class="fa-solid fa-image"></i> Image guided</button>
+                <button type="button" class="mv-chip" onclick="applyPromptIdea('modify-activity-stacked')"><i class="fa-solid fa-code-compare"></i> Modify chart</button>
+            </div>
+            <section class="prompt-assistant" id="promptAssistant" aria-label="Demo prompt ideas">
+                <div class="prompt-assistant-head">
+                    <div class="prompt-assistant-title">
+                        <i class="fa-solid fa-lightbulb"></i>
+                        <span>Prompt Ideas</span>
+                        <small>4 scenarios · 8 MultiVis-Bench samples</small>
+                    </div>
+                    <button type="button" class="prompt-inspire-btn" id="promptInspireBtn" onclick="applyRandomPrompt()">
+                        <i class="fa-solid fa-shuffle"></i> Inspire Me
+                    </button>
+                </div>
+                <div class="prompt-grid" id="promptIdeaGrid">
+                    <button type="button" class="prompt-card" data-prompt-id="activity-stacked" data-bench-source="MultiVis-Bench/text2vis.json#188" onclick="applyPromptIdea('activity-stacked')">
+                        <span class="prompt-card-top"><i class="fa-solid fa-keyboard"></i> Text2Vis</span>
+                        <span class="prompt-card-text">Students vs faculty per activity</span>
+                        <span class="prompt-card-meta">Activity · text2vis #188</span>
+                    </button>
+                    <button type="button" class="prompt-card" data-prompt-id="chinook-genre-pie" data-bench-source="MultiVis-Bench/text2vis.json#195" onclick="applyPromptIdea('chinook-genre-pie')">
+                        <span class="prompt-card-top"><i class="fa-solid fa-keyboard"></i> Text2Vis</span>
+                        <span class="prompt-card-text">Track share by music genre</span>
+                        <span class="prompt-card-meta">Chinook · text2vis #195</span>
+                    </button>
+                    <button type="button" class="prompt-card" data-prompt-id="image-campus-stacked" data-bench-source="MultiVis-Bench/text2vis_with_img.json#152" onclick="applyPromptIdea('image-campus-stacked')">
+                        <span class="prompt-card-top"><i class="fa-solid fa-image"></i> Image-guided</span>
+                        <span class="prompt-card-text">Campus activity participants</span>
+                        <span class="prompt-card-meta">Activity · image #152</span>
+                    </button>
+                    <button type="button" class="prompt-card" data-prompt-id="image-chinook-pie" data-bench-source="MultiVis-Bench/text2vis_with_img.json#156" onclick="applyPromptIdea('image-chinook-pie')">
+                        <span class="prompt-card-top"><i class="fa-solid fa-image"></i> Image-guided</span>
+                        <span class="prompt-card-text">Genre pie from reference image</span>
+                        <span class="prompt-card-meta">Chinook · image #156</span>
+                    </button>
+                    <button type="button" class="prompt-card" data-prompt-id="code-activity-stacked" data-bench-source="MultiVis-Bench/text2vis_with_code.json#329" onclick="applyPromptIdea('code-activity-stacked')">
+                        <span class="prompt-card-top"><i class="fa-solid fa-code"></i> Code-guided</span>
+                        <span class="prompt-card-text">Stacked bars from sample code</span>
+                        <span class="prompt-card-meta">Activity · code #329</span>
+                    </button>
+                    <button type="button" class="prompt-card" data-prompt-id="code-chinook-pie" data-bench-source="MultiVis-Bench/text2vis_with_code.json#340" onclick="applyPromptIdea('code-chinook-pie')">
+                        <span class="prompt-card-top"><i class="fa-solid fa-code"></i> Code-guided</span>
+                        <span class="prompt-card-text">Convert sample pie code</span>
+                        <span class="prompt-card-meta">Chinook · code #340</span>
+                    </button>
+                    <button type="button" class="prompt-card" data-prompt-id="modify-activity-stacked" data-bench-source="MultiVis-Bench/vis_modify.json#104" onclick="applyPromptIdea('modify-activity-stacked')">
+                        <span class="prompt-card-top"><i class="fa-solid fa-code-compare"></i> Vis Modify</span>
+                        <span class="prompt-card-text">Sort and restyle activity bars</span>
+                        <span class="prompt-card-meta">Activity · modify #104</span>
+                    </button>
+                    <button type="button" class="prompt-card" data-prompt-id="modify-chinook-tenure" data-bench-source="MultiVis-Bench/vis_modify.json#107" onclick="applyPromptIdea('modify-chinook-tenure')">
+                        <span class="prompt-card-top"><i class="fa-solid fa-code-compare"></i> Vis Modify</span>
+                        <span class="prompt-card-text">Improve tenure timeline</span>
+                        <span class="prompt-card-meta">Chinook · modify #107</span>
+                    </button>
+                </div>
+                <div class="recent-prompts" id="recentPromptsPanel">
+                    <div class="recent-prompts-head">
+                        <span><i class="fa-solid fa-clock-rotate-left"></i> Recent Inputs</span>
+                        <button type="button" id="clearRecentPromptsBtn" class="recent-clear-btn" onclick="clearRecentPrompts()" title="Clear recent inputs" aria-label="Clear recent inputs">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="recent-prompt-list" id="recentPromptList"></div>
+                </div>
+            </section>
             <div class="form-section">
                 <form method="post" enctype="multipart/form-data" id="queryForm" onsubmit="handleFormSubmit(event)">
+                    <input type="hidden" id="from_history_mode" value="false">
+                    <input type="hidden" id="history_time" value="">
                     <!-- 第一行：Natural Language Query (最重要的输入) -->
                     <div class="form-row-single">
                         <div class="form-group">
@@ -2599,11 +2797,11 @@
                             <textarea class="form-textarea" name="nl_query" placeholder="Describe your visualization requirement..." required>{{ nl_query or '' }}</textarea>
                         </div>
                     </div>
-                    
-                    <!-- 第二行：Database File、Code 和 Referenced Image -->
+
+                    <!-- 第二行：Database File、Referenced Image、Code (all left-aligned consistent grid) -->
                     <div class="form-grid">
                         <div class="form-group">
-                            <div class="form-label">Database File<span style="color:#ef4444">*</span></div>
+                            <div class="form-label">Database File<span class="required-mark">*</span></div>
                             <div class="file-upload-row">
                                 <label class="custom-file-label">
                                     <i class="fa-solid fa-database"></i> Upload Database
@@ -2613,13 +2811,15 @@
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </div>
-                            <span id="db-file-name"></span>
-                            <input type="hidden" name="db_name" id="db_name" value="{{ db_name or '' }}">
+                            <span id="db-file-name" class="file-name-display"></span>
+                            <input type="hidden" name="db_name" id="db_name" value="{{ db_name or default_db or 'chinook_1.sqlite' }}">
                         </div>
-                        
-                        <div class="form-group" style="text-align: center;">
-                            <div class="form-label" style="text-align: center;">Referenced Image (Optional)</div>
-                            <div class="file-upload-row" style="justify-content: center;">
+
+                        <div class="form-group">
+                            <div class="form-label">Referenced Image <span class="form-label-optional">(Optional)</span></div>
+                            <input type="hidden" name="benchmark_ref_image_url" id="benchmark_ref_image_url" value="">
+                            <input type="hidden" name="benchmark_ref_image_name" id="benchmark_ref_image_name" value="">
+                            <div class="file-upload-row">
                                 <label class="custom-file-label">
                                     <i class="fa-solid fa-image"></i> Upload Image
                                     <input type="file" name="ref_image" id="ref_image" accept="image/*" style="display:none" onchange="showFileName(this)">
@@ -2628,15 +2828,19 @@
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </div>
-                            <span id="file-name" style="text-align: center; display: block;"></span>
+                            <div class="code-info" id="image-info" style="display:none;">
+                                <span class="code-label">Image:</span>
+                                <span class="reference-source-badge" id="image-source-badge" style="display:none;">Benchmark</span>
+                                <span id="file-name"></span>
+                            </div>
                         </div>
-                        
-                        <div class="form-group" style="text-align: right;">
-                            <div class="form-label" style="text-align: right;">Code (Optional)</div>
+
+                        <div class="form-group">
+                            <div class="form-label">Code <span class="form-label-optional">(Optional)</span></div>
                             <input type="hidden" name="code" id="code" value="{{ code or '' }}">
-                            <div class="code-actions" style="justify-content: flex-end;">
+                            <div class="file-upload-row">
                                 <div class="dropdown">
-                                    <button type="button" class="add-code-btn" id="addCodeBtn" onclick="toggleDropdown(event)">
+                                    <button type="button" class="custom-file-label add-code-btn" id="addCodeBtn" onclick="toggleDropdown(event)">
                                         <i class="fa-solid fa-plus"></i> Add Code
                                     </button>
                                     <div class="dropdown-content" id="codeDropdown">
@@ -2649,49 +2853,53 @@
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </div>
-                            <div class="code-info" id="code-info" style="display:none; text-align: right;">
-                                <span class="code-label">Code added: </span>
+                            <div class="code-info" id="code-info" style="display:none;">
+                                <span class="code-label">Code:</span>
+                                <span class="reference-source-badge" id="code-source-badge" style="display:none;">Reference</span>
                                 <span id="code-file-name"></span>
                             </div>
-                            <div class="code-type-checkbox" style="margin-top: 10px; text-align: right;">
+                            <label class="code-type-checkbox">
                                 <input type="checkbox" id="is_database_code" name="is_database_code">
-                                <label for="is_database_code">This code is based on the uploaded database</label>
-                            </div>
+                                <span>This code is based on the uploaded database</span>
+                            </label>
                         </div>
                     </div>
-                    
-                    <!-- 第三行：清除上传、生成代码按钮和模型选择 -->
+
+                    <!-- 第三行：模型选择、清除上传、生成按钮 (一行对齐) -->
                     <div class="button-row">
-                        <button type="button" class="clear-uploads-btn" id="clear-all-uploads-btn">
-                            <i class="fa-solid fa-broom"></i> Clear All Uploads
-                        </button>
-                        <button class="generate-btn" type="submit"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate</button>
                         <div class="model-selection">
-                            <div class="form-label">AI Model<span style="color:#ef4444">*</span></div>
+                            <div class="form-label">AI Model<span class="required-mark">*</span></div>
                             <select class="form-select" name="model_type" id="model_type" required>
-                                <option value="claude-4-sonnet">Claude 4 Sonnet</option>
-                                <option value="gpt-5">GPT 5</option>
-                                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                                <option value="gemini-2.0-flash" selected>Gemini 2.0 Flash</option>
-                                <option value="gpt-5-mini">GPT 5 Mini</option>
-                                <option value="gpt-5-nano">GPT 5 Nano</option>
+                                <option value="gemini-3-flash-preview" selected>Gemini 3 Flash Preview - Best Value</option>
+                                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite - Lowest Cost</option>
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash - Stable Low Cost</option>
+                                <option value="gpt-5.4-mini">GPT 5.4 Mini - Strong Small Model</option>
+                                <option value="gpt-5.4-nano">GPT 5.4 Nano - Budget GPT</option>
                             </select>
+                        </div>
+                        <div class="button-row-actions">
+                            <button type="button" class="clear-uploads-btn" id="clear-all-uploads-btn">
+                                <i class="fa-solid fa-broom"></i> Clear All Uploads
+                            </button>
+                            <button class="generate-btn" type="submit"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate Visualization</button>
                         </div>
                     </div>
                 </form>
                 <!-- Database Structure Viewer -->
-                <div id="dbStructureSection" class="schema-card" style="margin-top: 1rem; display: none;">
-                    <div class="schema-header">
+                <div id="dbStructureSection" class="schema-card schema-collapsed" style="margin-top: 1rem; display: none;">
+                    <div class="schema-header" onclick="toggleSchemaPanel(event)">
                         <div class="schema-title"><i class="fa-solid fa-database"></i> Database Schema <span id="schemaDbName" class="schema-dbname"></span></div>
-                        <button type="button" class="schema-refresh" onclick="refreshDbSchema()"><i class="fa-solid fa-rotate"></i> Refresh Schema</button>
+                        <div style="display:flex;gap:8px;align-items:center;" onclick="event.stopPropagation();">
+                            <button type="button" class="schema-toggle-btn" id="schemaToggleBtn" onclick="toggleSchemaPanel(event)"><i class="fa-solid fa-chevron-up"></i> <span id="schemaToggleLabel">Expand</span></button>
+                            <button type="button" class="schema-refresh" onclick="refreshDbSchema();"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                        </div>
                     </div>
                     <div id="dbStructureContainer"></div>
                 </div>
             </div>
-            
 
-            
+
+
             <!-- 结果将在新标签页中显示 -->
         </div>
     </div>
@@ -2798,18 +3006,19 @@ function saveCodeInput() {
         return;
     }
     console.log('Code entered successfully');
-    
+
     // 保存代码到隐藏字段
     document.getElementById('code').value = codeInput;
-    
+
     // 显示代码信息
     document.getElementById('code-file-name').innerText = 'Code entered manually';
     document.getElementById('code-info').style.display = 'flex';
     document.getElementById('code-delete-btn').style.display = 'flex';
-    
+    setReferenceBadge('code-source-badge', 'Manual');
+
     // 关闭模态框
     closeCodeInputModal();
-    
+
     showToast('Code added successfully', 'success');
 }
 
@@ -2830,15 +3039,15 @@ function triggerFileUpload() {
 function deleteHistoryItem(index, event) {
     // 阻止事件冒泡，避免触发loadHistoryItem
     event.stopPropagation();
-    
-    // 显示确认对话框
-    if (!confirm('确定要删除这条历史记录吗？')) {
+
+    // Show confirmation dialog
+    if (!confirm('Delete this history record? This cannot be undone.')) {
         return;
     }
-    
+
     // 显示加载提示
     showToast('Deleting history record...', 'info');
-    
+
     // 发送删除请求到后端
     fetch(`/delete_history/${index}`, {
         method: 'DELETE',
@@ -2853,12 +3062,12 @@ function deleteHistoryItem(index, event) {
             // 刷新历史记录显示
             refreshHistory();
         } else {
-            showToast('删除历史记录失败：' + (data.error || '未知错误'), 'error');
+            showToast('Failed to delete history record: ' + (data.error || 'Unknown error'), 'error');
         }
     })
     .catch(error => {
-        console.error('删除历史记录时出错:', error);
-        showToast('删除历史记录时出错', 'error');
+        console.error('Error while deleting history record:', error);
+        showToast('Error while deleting history record', 'error');
     });
 }
 
@@ -2876,12 +3085,19 @@ function copyCode() {
 var activeToasts = [];
 
 function showToast(msg, type) {
+    while (activeToasts.length >= 2) {
+        var staleToast = activeToasts.shift();
+        if (staleToast && document.body.contains(staleToast)) {
+            document.body.removeChild(staleToast);
+        }
+    }
+
     var toast = document.createElement('div');
     toast.innerText = msg;
     toast.style.position = 'fixed';
     toast.style.left = '50%';
     toast.style.transform = 'translateX(-50%)';
-    
+
     // 根据类型设置不同的背景色
     if (type === 'success') {
         toast.style.background = 'linear-gradient(135deg, #10b981, #059669)';
@@ -2890,7 +3106,7 @@ function showToast(msg, type) {
     } else if (type === 'info') {
         toast.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
     }
-    
+
     toast.style.color = '#fff';
     toast.style.padding = '1rem 2rem';
     toast.style.borderRadius = '12px';
@@ -2902,27 +3118,27 @@ function showToast(msg, type) {
     toast.style.transition = 'all 0.3s ease';
     toast.style.backdropFilter = 'blur(10px)';
     toast.style.pointerEvents = 'none';
-    
+
     // 将新弹窗添加到管理数组
     activeToasts.push(toast);
-    
+
     // 重新计算所有弹窗位置
     updateToastPositions();
-    
+
     document.body.appendChild(toast);
-    
+
     // 显示动画
-    setTimeout(function(){ 
-        toast.style.opacity = 1; 
+    setTimeout(function(){
+        toast.style.opacity = 1;
     }, 10);
-    
+
     // 隐藏动画
-    setTimeout(function(){ 
-        toast.style.opacity = 0; 
+    setTimeout(function(){
+        toast.style.opacity = 0;
     }, 2000);
-    
+
     // 移除弹窗
-    setTimeout(function(){ 
+    setTimeout(function(){
         if (document.body.contains(toast)) {
             document.body.removeChild(toast);
         }
@@ -2940,7 +3156,7 @@ function showToast(msg, type) {
 function updateToastPositions() {
     var toastHeight = 60; // 估算每个弹窗的高度（包括间距）
     var baseBottom = 2; // 基础底部距离（rem）
-    
+
     activeToasts.forEach(function(toast, index) {
         var bottomPosition = baseBottom + (index * toastHeight / 16); // 转换为rem
         toast.style.bottom = bottomPosition + 'rem';
@@ -2968,12 +3184,12 @@ function showModal(title, content) {
             </div>
         `;
         document.body.appendChild(modal);
-        
+
         // 添加关闭事件
         modal.querySelector('.close').onclick = function() {
             modal.style.display = 'none';
         };
-        
+
         // 点击模态框外部关闭
         window.onclick = function(event) {
             if (event.target === modal) {
@@ -2981,11 +3197,11 @@ function showModal(title, content) {
             }
         };
     }
-    
+
     // 更新模态框内容
     modal.querySelector('.modal-title').textContent = title;
     modal.querySelector('.modal-body').innerHTML = content;
-    
+
     // 显示模态框
     modal.style.display = 'block';
 }
@@ -3002,25 +3218,26 @@ function handleCodeUpload(input, targetTextareaId) {
         return;
     }
     console.log('File selected:', file.name);
-    
+
     // 显示代码信息
     document.getElementById('code-file-name').innerText = file.name;
     document.getElementById('code-info').style.display = 'flex';
     document.getElementById('code-delete-btn').style.display = 'flex';
-    
+    setReferenceBadge('code-source-badge', 'Uploaded');
+
     // 显示当前文件名
     const fileNameSpanId = 'code-file-name';
     document.getElementById(fileNameSpanId).innerText = file.name;
-    
+
     // 显示删除按钮
     const deleteButtonId = 'code-delete-btn';
     document.getElementById(deleteButtonId).style.display = 'flex';
-    
+
     // 读取文件内容
     const reader = new FileReader();
     reader.onload = function(e) {
         let content = e.target.result;
-        
+
         // 如果是.ipynb文件，提取代码单元格
         if (file.name.endsWith('.ipynb')) {
             try {
@@ -3031,31 +3248,31 @@ function handleCodeUpload(input, targetTextareaId) {
                 return;
             }
         }
-        
+
         // 填充到对应的textarea
         document.getElementById(targetTextareaId).value = content;
         showToast('Code loaded from ' + file.name, 'success');
     };
-    
+
     reader.onerror = function() {
         showToast('Error reading file: ' + file.name, 'error');
     };
-    
+
     reader.readAsText(file);
 }
 
 function extractCodeFromNotebook(notebook) {
     let extractedCode = '';
-    
+
     if (!notebook.cells || !Array.isArray(notebook.cells)) {
         throw new Error('Invalid notebook format');
     }
-    
+
     notebook.cells.forEach((cell, index) => {
         if (cell.cell_type === 'code' && cell.source) {
             // 添加单元格标识
             extractedCode += `# Cell ${index + 1}\n`;
-            
+
             // 处理source内容，可能是字符串或字符串数组
             let source = '';
             if (Array.isArray(cell.source)) {
@@ -3063,9 +3280,9 @@ function extractCodeFromNotebook(notebook) {
             } else {
                 source = cell.source;
             }
-            
+
             extractedCode += source;
-            
+
             // 确保单元格之间有换行分隔
             if (!source.endsWith('\n')) {
                 extractedCode += '\n';
@@ -3073,14 +3290,14 @@ function extractCodeFromNotebook(notebook) {
             extractedCode += '\n';
         }
     });
-    
+
     return extractedCode.trim();
 }
 
 function deleteUploadedFile(fileType, showToastMessage = true) {
     // 确定要清除的元素ID
     let textareaId, fileInputId, fileNameSpanId, deleteButtonId;
-    
+
     if (fileType === 'code') {
         textareaId = 'code';
         fileInputId = 'code_file';
@@ -3103,8 +3320,12 @@ function deleteUploadedFile(fileType, showToastMessage = true) {
         fileInputId = 'ref_image';
         fileNameSpanId = 'file-name';
         deleteButtonId = 'ref-image-delete-btn';
+        const benchmarkImageUrl = document.getElementById('benchmark_ref_image_url');
+        if (benchmarkImageUrl) benchmarkImageUrl.value = '';
+        const benchmarkImageName = document.getElementById('benchmark_ref_image_name');
+        if (benchmarkImageName) benchmarkImageName.value = '';
     }
-    
+
     // 清除文件输入
     if (fileInputId) {
         const fileInput = document.getElementById(fileInputId);
@@ -3112,13 +3333,13 @@ function deleteUploadedFile(fileType, showToastMessage = true) {
             fileInput.value = '';
         }
     }
-    
+
     // 清除文件名显示
     if (fileNameSpanId) {
         const fileNameSpan = document.getElementById(fileNameSpanId);
         if (fileNameSpan) {
             fileNameSpan.innerText = '';
-            
+
             // 如果是图片文件，移除点击样式和事件
             if (fileType === 'ref_image') {
                 fileNameSpan.classList.remove('clickable');
@@ -3126,7 +3347,15 @@ function deleteUploadedFile(fileType, showToastMessage = true) {
             }
         }
     }
-    
+
+    if (fileType === 'ref_image') {
+        const imageInfo = document.getElementById('image-info');
+        if (imageInfo) {
+            imageInfo.style.display = 'none';
+        }
+        setReferenceBadge('image-source-badge', '', false);
+    }
+
     // 隐藏删除按钮
     if (deleteButtonId) {
         const deleteButton = document.getElementById(deleteButtonId);
@@ -3134,20 +3363,21 @@ function deleteUploadedFile(fileType, showToastMessage = true) {
             deleteButton.style.display = 'none';
         }
     }
-    
+
     // 清除代码内容
     if (textareaId) {
         const codeInput = document.getElementById(textareaId);
         if (codeInput) {
             codeInput.value = '';
         }
-        
+
         // 隐藏代码信息区域
         if (textareaId === 'code') {
             document.getElementById('code-info').style.display = 'none';
+            setReferenceBadge('code-source-badge', '', false);
         }
     }
-    
+
     // 显示成功提示（如果需要）
     if (showToastMessage) {
         const fileTypeNames = {
@@ -3155,7 +3385,7 @@ function deleteUploadedFile(fileType, showToastMessage = true) {
             'mod_code': 'Code to Be Modified',
             'ref_image': 'Referenced Image'
         };
-        
+
         showToast(`${fileTypeNames[fileType]} cleared successfully!`, 'success');
     }
 }
@@ -3179,13 +3409,13 @@ function clearAllUploads(showMessage = true) {
     deleteUploadedFile('code', false);
     deleteUploadedFile('db_file', false);
     deleteUploadedFile('ref_image', false);
-    
+
     // 重置代码类型勾选框
     const databaseCodeCheckbox = document.getElementById('is_database_code');
     if (databaseCodeCheckbox) {
         databaseCodeCheckbox.checked = false;
     }
-    
+
     // 仅在showMessage为true时显示提示
     if (showMessage) {
         showToast('All uploads cleared successfully!', 'success');
@@ -3205,7 +3435,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function downloadChart() {
     // 检查是否有交互式图表
     var chartDiv = document.getElementById('chartArea');
-    
+
     // 如果是交互式图表，提供两种下载选项：PNG和JSON
     if (chartDiv.classList.contains('has-interactive-chart')) {
         // 获取当前可能的JSON路径
@@ -3226,14 +3456,14 @@ function downloadChart() {
             downloadMenu.style.display = 'flex';
             downloadMenu.style.flexDirection = 'column';
             downloadMenu.style.gap = '10px';
-            
+
             // 添加标题
             var title = document.createElement('h3');
             title.textContent = '下载选项';
             title.style.margin = '0 0 10px 0';
             title.style.textAlign = 'center';
             downloadMenu.appendChild(title);
-            
+
             // 添加PNG下载按钮
             var pngBtn = document.createElement('button');
             pngBtn.textContent = '下载PNG图片';
@@ -3268,7 +3498,7 @@ function downloadChart() {
                 }
             };
             downloadMenu.appendChild(pngBtn);
-            
+
             // 添加JSON下载按钮
             var jsonBtn = document.createElement('button');
             jsonBtn.textContent = '下载JSON规范';
@@ -3283,7 +3513,7 @@ function downloadChart() {
                 var currentUrl = window.location.href;
                 var baseUrl = currentUrl.split('?')[0]; // 移除查询参数
                 var jsonPath = baseUrl.substring(0, baseUrl.lastIndexOf('/')) + chartDiv.querySelector('#vis').__vegaEmbed.spec;
-                
+
                 if (jsonPath) {
                     fetch(jsonPath)
                         .then(response => response.json())
@@ -3311,7 +3541,7 @@ function downloadChart() {
                 }
             };
             downloadMenu.appendChild(jsonBtn);
-            
+
             // 添加取消按钮
             var cancelBtn = document.createElement('button');
             cancelBtn.textContent = '取消';
@@ -3327,7 +3557,7 @@ function downloadChart() {
                 document.body.removeChild(overlay);
             };
             downloadMenu.appendChild(cancelBtn);
-            
+
             // 添加半透明遮罩
             var overlay = document.createElement('div');
             overlay.style.position = 'fixed';
@@ -3341,14 +3571,14 @@ function downloadChart() {
                 document.body.removeChild(downloadMenu);
                 document.body.removeChild(overlay);
             };
-            
+
             document.body.appendChild(overlay);
             document.body.appendChild(downloadMenu);
-            
+
             return;
         }
     }
-    
+
     // 如果是静态图表，直接下载图片
     var img = chartDiv.querySelector('img');
     if (img && img.src) {
@@ -3368,7 +3598,7 @@ function downloadChart() {
 function setCodeWithHighlight(code) {
     const codeArea = document.getElementById('generatedCodeArea');
     const codeElement = codeArea.querySelector('code');
-    
+
     if (codeElement) {
         codeElement.textContent = code;
         // 触发Prism.js语法高亮
@@ -3392,10 +3622,10 @@ function initializePage() {
     // 初始状态隐藏所有按钮（如果存在）
     const copyCodeBtn = document.getElementById('copyCodeBtn');
     if (copyCodeBtn) copyCodeBtn.style.display = 'none';
-    
+
     const downloadChartBtn = document.getElementById('downloadChartBtn');
     if (downloadChartBtn) downloadChartBtn.style.display = 'none';
-    
+
     // 确保Chart区域有正确的初始类名
     const chartArea = document.getElementById('chartArea');
     if (chartArea) chartArea.className = 'generated-code';
@@ -3403,8 +3633,8 @@ function initializePage() {
 
 window.onload = function() {
     initializePage();
-    refreshHistory(); // 页面加载时刷新历史记录
-    
+    // History is server-rendered; refreshHistory() runs after generate/delete only
+
     // Check if there's a session ID for progress tracking
     var sessionId = /* template */ {% if session_id %}'{{ session_id }}'{% else %}null{% endif %};
     if (sessionId) {
@@ -3414,18 +3644,18 @@ window.onload = function() {
 
 function connectToProgress(sessionId) {
     console.log('Connecting to progress stream for session:', sessionId);
-    
+
     // Show progress overlay
     const progressOverlay = document.getElementById('progressOverlay');
     const progressContent = document.getElementById('progressContent');
-    
+
     progressOverlay.style.display = 'block';
     progressContent.textContent = 'Connecting to progress stream...';
-    
+
     // Create EventSource connection
     const eventSource = new EventSource('/progress/' + sessionId);
     let connectionEstablished = false;
-    
+
     eventSource.onopen = function(event) {
         console.log('SSE connection opened:', event);
         connectionEstablished = true;
@@ -3435,19 +3665,19 @@ function connectToProgress(sessionId) {
         if (lines.length > 6) lines.shift();
         progressContent.textContent = lines.join('\n');
     };
-    
+
     eventSource.onmessage = function(event) {
         try {
             const data = JSON.parse(event.data);
             console.log('Progress update:', data);
-            
+
             updateProgress(data);
-            
+
             if (data.step === 'complete') {
                 // Update final results
                 updateFinalResults(data.data);
                 eventSource.close();
-                
+
                 // Hide progress overlay after a delay
                 setTimeout(() => {
                     progressOverlay.style.display = 'none';
@@ -3467,12 +3697,12 @@ function connectToProgress(sessionId) {
             progressContent.textContent = lines.join('\n');
         }
     };
-    
+
     eventSource.onerror = function(event) {
         console.error('SSE connection error:', event);
         const timestamp = new Date().toLocaleTimeString();
         const lines = progressContent.textContent.split('\n').filter(line => line.trim() !== '');
-        
+
         if (!connectionEstablished) {
             lines.push(`[${timestamp}] ❌ Failed to connect to server`);
             showToast('Failed to connect to server. Please check if the server is running.', 'error');
@@ -3480,11 +3710,11 @@ function connectToProgress(sessionId) {
             lines.push(`[${timestamp}] ⚠️ Connection interrupted`);
             showToast('Connection interrupted. Trying to reconnect...', 'error');
         }
-        
+
         if (lines.length > 6) lines.shift();
         progressContent.textContent = lines.join('\n');
     };
-    
+
     // 设置超时检查
     setTimeout(() => {
         if (!connectionEstablished) {
@@ -3503,10 +3733,10 @@ function connectToProgress(sessionId) {
 function updateProgress(data) {
     const progressContent = document.getElementById('progressContent');
     const timestamp = data.timestamp || new Date().toLocaleTimeString();
-    
+
     let statusIcon = '';
     let statusClass = '';
-    
+
     switch (data.status) {
         case 'processing':
             statusIcon = '⏳';
@@ -3524,41 +3754,41 @@ function updateProgress(data) {
             statusIcon = 'ℹ️';
             statusClass = 'info';
     }
-    
+
     // 限制显示的进度条目数量（最多显示6条）
     const lines = progressContent.textContent.split('\n').filter(line => line.trim() !== '');
     if (lines.length >= 6) {
         lines.shift(); // 移除最老的一条
     }
     lines.push(`[${timestamp}] ${statusIcon} ${data.data || data.step}`);
-    
+
     // 每行显示，用换行符连接
     progressContent.textContent = lines.join('\n');
-    
+
     // Auto-scroll to bottom
     progressContent.scrollTop = progressContent.scrollHeight;
-    
+
     // Update specific areas based on step
     if (data.step === 'code_update' && data.data) {
         setCodeWithHighlight(data.data);
         // 在代码迭代过程中，隐藏Copy按钮
         document.getElementById('copyCodeBtn').style.display = 'none';
     }
-    
+
     // Handle iteration chart updates
     if (data.step === 'code_iteration' && data.data && data.data.chart_path) {
         console.log('Updating chart for iteration:', data.data.iteration);
-        
+
         // 显示迭代弹窗 - 在代码和图表区域都显示
         showIterationPopup('generatedCodeArea', data.data.iteration);
         showIterationPopup('chartArea', data.data.iteration);
-        
+
         updateIterationChart(data.data);
         setCodeWithHighlight(data.data.code);
         // 在迭代过程中隐藏Copy按钮
         document.getElementById('copyCodeBtn').style.display = 'none';
     }
-    
+
     // Handle evaluation result updates
     // 注释：评估结果只在最终结果中显示，不在进度更新中显示
     // if (data.step === 'evaluation_result' && data.data) {
@@ -3581,36 +3811,36 @@ function showIterationPopup(containerId, iterationNumber) {
      */
     // 找到对应的容器
     const container = document.getElementById(containerId);
-    
+
     if (!container) {
         console.warn(`Container ${containerId} not found`);
         return;
     }
-    
+
     // 移除之前的弹窗（如果存在）
     const popupKey = containerId === 'generatedCodeArea' ? 'codeArea' : 'chartArea';
     if (currentPopups[popupKey]) {
         currentPopups[popupKey].remove();
         currentPopups[popupKey] = null;
     }
-    
+
     // 确保容器有relative定位
     const originalPosition = container.style.position;
     if (!originalPosition || originalPosition === 'static') {
         container.style.position = 'relative';
     }
-    
+
     // 创建弹窗元素
     const popup = document.createElement('div');
     popup.className = 'iteration-popup';
     popup.textContent = `Iteration ${iterationNumber}`;
-    
+
     // 添加到容器中
     container.appendChild(popup);
-    
+
     // 保存弹窗引用
     currentPopups[popupKey] = popup;
-    
+
     console.log(`Iteration ${iterationNumber} popup shown in ${containerId} right corner`);
 }
 
@@ -3621,33 +3851,33 @@ function showFinalResultPopup(containerId) {
      */
     // 找到对应的容器
     const container = document.getElementById(containerId);
-    
+
     if (!container) {
         console.warn(`Container ${containerId} not found`);
         return;
     }
-    
+
     // 移除之前的迭代弹窗（如果存在）
     const popupKey = containerId === 'generatedCodeArea' ? 'codeArea' : 'chartArea';
     if (currentPopups[popupKey]) {
         currentPopups[popupKey].remove();
         currentPopups[popupKey] = null;
     }
-    
+
     // 确保容器有relative定位
     const originalPosition = container.style.position;
     if (!originalPosition || originalPosition === 'static') {
         container.style.position = 'relative';
     }
-    
+
     // 创建最终结果弹窗元素
     const popup = document.createElement('div');
     popup.className = 'final-result-popup';
     popup.textContent = 'Final Result';
-    
+
     // 添加到容器中
     container.appendChild(popup);
-    
+
     // 1秒后移除弹窗
     setTimeout(() => {
         if (container.contains(popup)) {
@@ -3658,7 +3888,7 @@ function showFinalResultPopup(containerId) {
             container.style.position = '';
         }
     }, 1000);
-    
+
     console.log(`Final Result popup shown in ${containerId} right corner`);
 }
 
@@ -3668,13 +3898,13 @@ function updateIterationChart(iterationData) {
      * @param {Object} iterationData - 包含iteration, code, chart_path, timestamp的数据
      */
     console.log('Updating iteration chart:', iterationData);
-    
+
     const chartArea = document.getElementById('chartArea');
     const chartPath = '/' + iterationData.chart_path;
-    
+
     // 检查是否有JSON图表路径（从chart_path推断）
     const jsonPath = chartPath.replace('.png', '.vega.json');
-    
+
     // 首先尝试检查JSON文件是否存在
     fetch(jsonPath + `?t=${Date.now()}`)
         .then(response => {
@@ -3690,7 +3920,7 @@ function updateIterationChart(iterationData) {
                         <div id="vis"></div>
                     </div>
                 `;
-                
+
                 // 加载交互式图表
                 loadInteractiveChart(jsonPath + `?t=${Date.now()}`);
             } else {
@@ -3698,15 +3928,15 @@ function updateIterationChart(iterationData) {
                 console.log('No JSON chart found for iteration:', iterationData.iteration, 'using PNG');
                 // 添加时间戳参数以避免缓存问题
                 const chartUrl = `${chartPath}?t=${Date.now()}`;
-                
+
                 chartArea.className = 'generated-code has-image';
                 chartArea.innerHTML = `
                     <div style="position: relative;">
                         <div style="position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.7); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; z-index: 1;">
                             Iteration ${iterationData.iteration} - ${iterationData.timestamp}
                         </div>
-                        <img src="${chartUrl}" alt="chart iteration ${iterationData.iteration}" 
-                             onload="console.log('Iteration ${iterationData.iteration} chart loaded successfully'); addImageClickEvent(this);" 
+                        <img src="${chartUrl}" alt="chart iteration ${iterationData.iteration}"
+                             onload="console.log('Iteration ${iterationData.iteration} chart loaded successfully'); addImageClickEvent(this);"
                              onerror="console.log('Iteration ${iterationData.iteration} chart failed to load:', this.src);">
                     </div>
                 `;
@@ -3716,23 +3946,23 @@ function updateIterationChart(iterationData) {
             console.error('Error checking JSON chart:', error);
             // 出错时回退到静态图片
             const chartUrl = `${chartPath}?t=${Date.now()}`;
-            
+
             chartArea.className = 'generated-code has-image';
             chartArea.innerHTML = `
                 <div style="position: relative;">
                     <div style="position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.7); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; z-index: 1;">
                         Iteration ${iterationData.iteration} - ${iterationData.timestamp}
                     </div>
-                    <img src="${chartUrl}" alt="chart iteration ${iterationData.iteration}" 
-                         onload="console.log('Iteration ${iterationData.iteration} chart loaded successfully'); addImageClickEvent(this);" 
+                    <img src="${chartUrl}" alt="chart iteration ${iterationData.iteration}"
+                         onload="console.log('Iteration ${iterationData.iteration} chart loaded successfully'); addImageClickEvent(this);"
                          onerror="console.log('Iteration ${iterationData.iteration} chart failed to load:', this.src);">
                 </div>
             `;
         });
-    
+
     // 暂时隐藏下载按钮（在迭代过程中）
     document.getElementById('downloadChartBtn').style.display = 'none';
-    
+
     console.log('Chart updated for iteration', iterationData.iteration);
 }
 
@@ -3741,14 +3971,14 @@ function updateFinalResults(result) {
         console.log('No result data received');
         return;
     }
-    
+
     console.log('Final result data:', result);
     console.log('Chart image path from result:', result.chart_img);
-    
+
     // 显示最终结果弹窗
     showFinalResultPopup('generatedCodeArea');
     showFinalResultPopup('chartArea');
-    
+
     // Update code area
     if (result.vis_code_iter) {
         setCodeWithHighlight(result.vis_code_iter);
@@ -3758,17 +3988,17 @@ function updateFinalResults(result) {
     } else {
         console.log('No vis_code_iter in result');
     }
-    
+
     // Update chart area
     const chartArea = document.getElementById('chartArea');
-    
+
     // 检查是否有交互式图表JSON
     if (result.chart_json) {
         console.log('Chart JSON path:', result.chart_json);
         // 显示交互式图表
         chartArea.className = 'generated-code has-interactive-chart';
         chartArea.innerHTML = '<div id="vis"></div>';
-        
+
         // 加载交互式图表
         loadInteractiveChart(result.chart_json);
         document.getElementById('downloadChartBtn').style.display = 'inline-block';
@@ -3778,9 +4008,9 @@ function updateFinalResults(result) {
     else if (result.chart_img) {
         console.log('Chart image path:', result.chart_img);
         chartArea.className = 'generated-code has-image';
-        chartArea.innerHTML = 
-            `<img src="${result.chart_img}" alt="chart" 
-                   onload="console.log('Chart image loaded successfully'); document.getElementById('downloadChartBtn').style.display = 'inline-block'; addImageClickEvent(this);" 
+        chartArea.innerHTML =
+            `<img src="${result.chart_img}" alt="chart"
+                   onload="console.log('Chart image loaded successfully'); document.getElementById('downloadChartBtn').style.display = 'inline-block'; addImageClickEvent(this);"
                    onerror="console.log('Chart image failed to load:', this.src)">`;
         console.log('Updated chart area with image');
     } else {
@@ -3789,29 +4019,29 @@ function updateFinalResults(result) {
         const defaultPath = '/test_tmp/generated_chart.png';
         console.log('Trying default chart path:', defaultPath);
         chartArea.className = 'generated-code has-image';
-        chartArea.innerHTML = 
-            `<img src="${defaultPath}" alt="chart" 
-                   onload="console.log('Default chart image loaded successfully'); document.getElementById('downloadChartBtn').style.display = 'inline-block'; addImageClickEvent(this);" 
+        chartArea.innerHTML =
+            `<img src="${defaultPath}" alt="chart"
+                   onload="console.log('Default chart image loaded successfully'); document.getElementById('downloadChartBtn').style.display = 'inline-block'; addImageClickEvent(this);"
                    onerror="console.log('Default chart image failed to load:', this.src); document.getElementById('chartArea').className = 'generated-code'; document.getElementById('chartArea').innerHTML = '-- The chart will be displayed here --';">`;
     }
-    
+
     // Update evaluation area
     if (result.eval_result) {
         const evalArea = document.getElementById('evalArea');
         const evalSummary = document.getElementById('evalSummary');
-        
+
         // 设置完整评估结果
         evalArea.textContent = result.eval_result;
-        
+
         // 判断是否通过评估（与result.html保持一致的逻辑）
         const evalText = result.eval_result.toLowerCase();
         // 如果包含失败关键词，则判定为失败
         const hasFailed = evalText.includes('fail') || evalText.includes('error');
         // 只有在不包含失败关键词的情况下，才检查是否包含成功关键词
-        const isPassed = !hasFailed && (evalText.includes('pass') || 
-                        evalText.includes('success') || 
+        const isPassed = !hasFailed && (evalText.includes('pass') ||
+                        evalText.includes('success') ||
                         evalText.includes('correct'));
-        
+
         // 设置评估摘要
         if (isPassed) {
             evalSummary.innerHTML = '<i class="fa-solid fa-check-circle"></i> Evaluation Results: <span class="eval-passed">Passed</span>';
@@ -3822,50 +4052,512 @@ function updateFinalResults(result) {
             evalSummary.classList.add('eval-failed');
             evalSummary.classList.remove('eval-passed');
         }
-        
+
         // 添加提示信息
         evalSummary.title = "Hover to see full evaluation details";
-        
+
         console.log('Updated evaluation area with status:', isPassed ? 'Passed' : 'Failed');
     } else {
         document.getElementById('evalSummary').textContent = 'Evaluation Results: No Data';
         document.getElementById('evalArea').textContent = '-- No evaluation results available --';
         console.log('No eval_result in result');
     }
-    
+
     showToast('Visualization generation completed!', 'success');
-    
+
     // 刷新历史记录，确保结果信息更新
     setTimeout(() => {
         refreshHistory();
     }, 500); // 稍微延迟确保服务器端已更新历史记录
 }
 
+window.DEMO_PROMPT_IDEAS = [
+    {
+        id: 'activity-stacked',
+        dbName: 'activity_1.sqlite',
+        scenario: 'Text2Vis',
+        sourceFile: 'MultiVis-Bench/text2vis.json',
+        sourceIndex: 188,
+        sourceType: 'type_A',
+        chartCategory: 'Bar Charts',
+        chartType: 'stacked_bar_chart',
+        query: 'Can you create a bar chart showing the number of students and faculty participating in each activity? I\'d like to see the activities listed along the bottom, with bars showing the count of participants stacked by type (students vs faculty), using different colors to distinguish between them.'
+    },
+    {
+        id: 'chinook-genre-pie',
+        dbName: 'chinook_1.sqlite',
+        scenario: 'Text2Vis',
+        sourceFile: 'MultiVis-Bench/text2vis.json',
+        sourceIndex: 195,
+        sourceType: 'type_A',
+        chartCategory: 'Circular Plots',
+        chartType: 'pie_chart',
+        query: 'Can you show me a pie chart of how many tracks belong to each music genre? I\'d like to see which genres have the most tracks in the database.'
+    },
+    {
+        id: 'image-campus-stacked',
+        dbName: 'activity_1.sqlite',
+        scenario: 'Image-guided',
+        sourceFile: 'MultiVis-Bench/text2vis_with_img.json',
+        sourceIndex: 152,
+        sourceType: 'type_B',
+        chartCategory: 'Bar Charts',
+        chartType: 'stacked_bar_chart',
+        referenceImageUrl: '/static/bench_examples/img/stacked_bar_chart.png',
+        referenceImageName: 'Bar Charts___stacked_bar_chart.png',
+        referencePath: 'MultiVis-Bench/img/Bar Charts___stacked_bar_chart.png',
+        query: 'Can you create a stacked bar chart showing the number of students and faculty participating in each campus activity? I\'d like to see the activities listed on the x-axis, with the count on the y-axis, and different colors for students versus faculty members. Please use the Activity, Participates_in, and Faculty_Participates_in tables from the database.'
+    },
+    {
+        id: 'image-chinook-pie',
+        dbName: 'chinook_1.sqlite',
+        scenario: 'Image-guided',
+        sourceFile: 'MultiVis-Bench/text2vis_with_img.json',
+        sourceIndex: 156,
+        sourceType: 'type_B',
+        chartCategory: 'Circular Plots',
+        chartType: 'pie_chart',
+        referenceImageUrl: '/static/bench_examples/img/pie_chart.png',
+        referenceImageName: 'Circular Plots___pie_chart.png',
+        referencePath: 'MultiVis-Bench/img/Circular Plots___pie_chart.png',
+        query: 'I like this pie chart showing categories, but could you create one using actual music data from the database? I\'d like to see the distribution of tracks by genre names instead of just numbered categories, with each genre having its own color in the legend.'
+    },
+    {
+        id: 'code-activity-stacked',
+        dbName: 'activity_1.sqlite',
+        scenario: 'Code-guided',
+        sourceFile: 'MultiVis-Bench/text2vis_with_code.json',
+        sourceIndex: 329,
+        sourceType: 'type_C_altair',
+        chartCategory: 'Bar Charts',
+        chartType: 'stacked_bar_chart',
+        referenceCodeName: 'Bar Charts___stacked_bar_chart.py',
+        referencePath: 'MultiVis-Bench/code/altair/Bar Charts___stacked_bar_chart.py',
+        isDatabaseCode: false,
+        referenceCode: String.raw`import altair as alt
+import numpy as np
+import pandas as pd
+
+np.random.seed(42)
+varieties = ['A', 'B', 'C']
+sites = ['Site1', 'Site2', 'Site3', 'Site4']
+data = []
+for variety in varieties:
+    for site in sites:
+        data.append({'variety': variety, 'site': site, 'yield': np.random.randint(20, 80)})
+
+source = pd.DataFrame(data)
+
+alt.Chart(source).mark_bar().encode(
+    x='variety',
+    y='sum(yield)',
+    color='site'
+)`,
+        query: 'Can you create a bar chart that shows the number of students and faculty participating in each activity? I\'d like to see the activities listed along the bottom axis, with bars showing the count of participants. Please use different colors to distinguish between students and faculty members in each activity, similar to how the example chart uses colors to show different sites for each variety.'
+    },
+    {
+        id: 'code-chinook-pie',
+        dbName: 'chinook_1.sqlite',
+        scenario: 'Code-guided',
+        sourceFile: 'MultiVis-Bench/text2vis_with_code.json',
+        sourceIndex: 340,
+        sourceType: 'type_C_matplotlib',
+        chartCategory: 'Circular Plots',
+        chartType: 'pie_chart',
+        referenceCodeName: 'Circular Plots___pie_chart.py',
+        referencePath: 'MultiVis-Bench/code/matplotlib/Circular Plots___pie_chart.py',
+        isDatabaseCode: false,
+        referenceCode: String.raw`import matplotlib.pyplot as plt
+
+categories = [1, 2, 3, 4, 5, 6]
+values = [4, 6, 10, 3, 7, 8]
+
+fig, ax = plt.subplots()
+wedges, texts = ax.pie(values, startangle=90, counterclock=False)
+ax.legend(wedges, categories)
+ax.axis('equal')
+
+plt.show()`,
+        query: 'Using the code I shared as a guide, could you create a colorful pie chart that shows how many tracks belong to each music genre from my music database? I\'d like to pull the data directly from my SQLite database called \'chinook_1\' instead of using the example values. The chart should show the genre names and count of tracks in each genre, with the larger genres appearing first. Could you use Altair instead of Matplotlib for this visualization?'
+    },
+    {
+        id: 'modify-activity-stacked',
+        dbName: 'activity_1.sqlite',
+        scenario: 'Vis Modify',
+        sourceFile: 'MultiVis-Bench/vis_modify.json',
+        sourceIndex: 104,
+        sourceType: 'type_D',
+        chartCategory: 'Bar Charts',
+        chartType: 'stacked_bar_chart',
+        referenceCodeName: 'Bar Charts___stacked_bar_chart___activity_1.py',
+        referencePath: 'MultiVis-Bench/vis_modify/Bar Charts___stacked_bar_chart___activity_1.py',
+        isDatabaseCode: true,
+        referenceCode: String.raw`import sqlite3
+import pandas as pd
+import altair as alt
+
+conn = sqlite3.connect('database/activity_1.sqlite')
+
+query = '''
+SELECT
+    A.activity_name,
+    COUNT(DISTINCT P.stuid) AS student_count,
+    COUNT(DISTINCT F.FacID) AS faculty_count
+FROM
+    Activity AS A
+LEFT JOIN
+    Participates_in AS P ON A.actid = P.actid
+LEFT JOIN
+    Faculty_Participates_in AS F ON A.actid = F.actid
+GROUP BY
+    A.activity_name
+'''
+
+df = pd.read_sql_query(query, conn)
+conn.close()
+
+df_melted = df.melt(
+    id_vars=['activity_name'],
+    value_vars=['student_count', 'faculty_count'],
+    var_name='participant_type',
+    value_name='count'
+)
+
+chart = alt.Chart(df_melted).mark_bar().encode(
+    x='activity_name:N',
+    y='sum(count):Q',
+    color='participant_type:N'
+)
+
+chart.show()`,
+        query: 'Can you improve this chart to make it easier to understand? I\'d like to sort the activities by total number of participants instead of alphabetically. Also, could you use nicer colors like blue and green for the bars? It would be helpful to add a title to the chart and more descriptive labels for the axes and legend. And when I hover over the bars, could you show me the exact numbers of students and faculty for each activity?'
+    },
+    {
+        id: 'modify-chinook-tenure',
+        dbName: 'chinook_1.sqlite',
+        scenario: 'Vis Modify',
+        sourceFile: 'MultiVis-Bench/vis_modify.json',
+        sourceIndex: 107,
+        sourceType: 'type_D',
+        chartCategory: 'Advanced Calculations',
+        chartType: 'gantt_chart',
+        referenceCodeName: 'Advanced Calculations___gantt_chart___chinook_1.py',
+        referencePath: 'MultiVis-Bench/vis_modify/Advanced Calculations___gantt_chart___chinook_1.py',
+        isDatabaseCode: true,
+        referenceCode: String.raw`import sqlite3
+import pandas as pd
+import altair as alt
+from datetime import datetime
+
+conn = sqlite3.connect('database/chinook_1.sqlite')
+
+query = '''
+SELECT
+    EmployeeId,
+    FirstName || ' ' || LastName AS FullName,
+    HireDate
+FROM
+    Employee
+'''
+
+df = pd.read_sql_query(query, conn)
+
+conn.close()
+
+today = datetime.today()
+df['start'] = df['HireDate'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S').year)
+df['end'] = today.year
+
+chart = alt.Chart(df).mark_bar().encode(
+    x='start:O',
+    x2='end:O',
+    y=alt.Y('FullName:N', title="Employee Name")
+).properties(
+    title="Employee Tenure at the Company"
+)
+
+chart`,
+        query: 'I really like the concept of this Gantt chart - it is helpful to visualize how long each employee has been with the company. But I think it could use a few tweaks. First, the colors are a bit plain; could we add a color gradient to represent tenure length? Maybe longer tenure could have a darker shade, while shorter tenure is lighter? Also, having tooltips that show exact hire dates and tenure lengths in years would make the chart even easier to interpret. Lastly, the current order of employee names makes it hard to identify trends - could you sort the chart by tenure length, with employees with the longest tenure at the top? And could you make the chart a bit bigger so it is easier to read?'
+    }
+];
+const DEMO_PROMPT_IDEAS = window.DEMO_PROMPT_IDEAS;
+
+const RECENT_PROMPTS_KEY = 'mv_recent_prompts';
+const RECENT_PROMPTS_LIMIT = 10;
+
+function getPromptIdeaById(promptId) {
+    return DEMO_PROMPT_IDEAS.find(item => item.id === promptId);
+}
+
+function setNaturalLanguageQuery(queryText) {
+    const ta = document.querySelector('textarea[name="nl_query"]');
+    if (!ta) return;
+    ta.value = queryText || '';
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    ta.focus();
+}
+
+function clearPromptReferenceInputs() {
+    const refImageInput = document.getElementById('ref_image');
+    if (refImageInput) {
+        try {
+            refImageInput.files = new DataTransfer().files;
+        } catch (_) {
+            refImageInput.value = '';
+        }
+    }
+
+    const imageName = document.getElementById('file-name');
+    if (imageName) {
+        imageName.innerText = '';
+        imageName.classList.remove('clickable');
+        imageName.onclick = null;
+    }
+    const benchmarkImageUrl = document.getElementById('benchmark_ref_image_url');
+    if (benchmarkImageUrl) benchmarkImageUrl.value = '';
+    const benchmarkImageName = document.getElementById('benchmark_ref_image_name');
+    if (benchmarkImageName) benchmarkImageName.value = '';
+    setReferenceBadge('image-source-badge', '', false);
+    const imageInfo = document.getElementById('image-info');
+    if (imageInfo) imageInfo.style.display = 'none';
+    const imageDelete = document.getElementById('ref-image-delete-btn');
+    if (imageDelete) imageDelete.style.display = 'none';
+
+    const codeInput = document.getElementById('code');
+    if (codeInput) codeInput.value = '';
+    const codeFileInput = document.getElementById('code_file');
+    if (codeFileInput) codeFileInput.value = '';
+    const codeName = document.getElementById('code-file-name');
+    if (codeName) codeName.innerText = '';
+    setReferenceBadge('code-source-badge', '', false);
+    const codeInfo = document.getElementById('code-info');
+    if (codeInfo) codeInfo.style.display = 'none';
+    const codeDelete = document.getElementById('code-delete-btn');
+    if (codeDelete) codeDelete.style.display = 'none';
+    const databaseCode = document.getElementById('is_database_code');
+    if (databaseCode) databaseCode.checked = false;
+}
+
+async function attachBenchmarkImage(idea) {
+    if (!idea.referenceImageUrl) return;
+    const input = document.getElementById('ref_image');
+    if (!input) return;
+    try {
+        const response = await fetch(idea.referenceImageUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        const file = new File([blob], idea.referenceImageName || 'benchmark_reference.png', {
+            type: blob.type || 'image/png'
+        });
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        input.files = dataTransfer.files;
+
+        const imageName = document.getElementById('file-name');
+        if (imageName) {
+            imageName.innerText = file.name;
+            imageName.classList.add('clickable');
+            imageName.onclick = function(event) {
+                previewUploadedImage(file, event);
+            };
+        }
+        const benchmarkImageUrl = document.getElementById('benchmark_ref_image_url');
+        if (benchmarkImageUrl) benchmarkImageUrl.value = idea.referenceImageUrl || '';
+        const benchmarkImageName = document.getElementById('benchmark_ref_image_name');
+        if (benchmarkImageName) benchmarkImageName.value = file.name;
+        const imageInfo = document.getElementById('image-info');
+        if (imageInfo) imageInfo.style.display = 'flex';
+        setReferenceBadge('image-source-badge', 'Benchmark');
+        const imageDelete = document.getElementById('ref-image-delete-btn');
+        if (imageDelete) imageDelete.style.display = 'flex';
+    } catch (error) {
+        console.error('Failed to attach benchmark image:', error);
+        showToast('Failed to attach benchmark image', 'error');
+    }
+}
+
+function attachBenchmarkCode(idea) {
+    if (!idea.referenceCode) return;
+    const codeInput = document.getElementById('code');
+    if (codeInput) codeInput.value = idea.referenceCode;
+    const codeName = document.getElementById('code-file-name');
+    if (codeName) codeName.innerText = idea.referenceCodeName || 'Benchmark reference code';
+    const codeInfo = document.getElementById('code-info');
+    if (codeInfo) codeInfo.style.display = 'flex';
+    setReferenceBadge('code-source-badge', idea.isDatabaseCode ? 'DB Code' : 'Benchmark');
+    const codeDelete = document.getElementById('code-delete-btn');
+    if (codeDelete) codeDelete.style.display = 'flex';
+    const databaseCode = document.getElementById('is_database_code');
+    if (databaseCode) databaseCode.checked = !!idea.isDatabaseCode;
+}
+
+async function applyPromptIdea(promptId) {
+    const idea = getPromptIdeaById(promptId);
+    if (!idea) return;
+    setNaturalLanguageQuery(idea.query);
+    selectDemoDatabase(idea.dbName);
+    clearPromptReferenceInputs();
+    if (idea.referenceCode) {
+        attachBenchmarkCode(idea);
+    }
+    if (idea.referenceImageUrl) {
+        await attachBenchmarkImage(idea);
+    }
+    document.querySelectorAll('.prompt-card').forEach(card => card.classList.remove('active'));
+    const activeCard = document.querySelector(`[data-prompt-id="${promptId}"]`);
+    if (activeCard) activeCard.classList.add('active');
+    showToast(`${idea.scenario || 'Benchmark'} sample applied`, 'info');
+}
+
+function applyRandomPrompt() {
+    const currentValue = Number(sessionStorage.getItem('mv_prompt_inspire_index') || '-1');
+    const nextIndex = (Number.isFinite(currentValue) ? currentValue + 1 : 0) % DEMO_PROMPT_IDEAS.length;
+    sessionStorage.setItem('mv_prompt_inspire_index', String(nextIndex));
+    applyPromptIdea(DEMO_PROMPT_IDEAS[nextIndex].id);
+}
+
+function readRecentPrompts() {
+    try {
+        const raw = localStorage.getItem(RECENT_PROMPTS_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+        return [];
+    }
+}
+
+function writeRecentPrompts(items) {
+    try {
+        localStorage.setItem(RECENT_PROMPTS_KEY, JSON.stringify(items.slice(0, RECENT_PROMPTS_LIMIT)));
+    } catch (_) {}
+}
+
+function currentDemoDbName() {
+    return document.getElementById('db_name')?.value || 'chinook_1.sqlite';
+}
+
+function saveRecentPrompt(queryText, dbName) {
+    const normalized = (queryText || '').toString().replace(/\s+/g, ' ').trim();
+    if (normalized.length < 8) return;
+    const existing = readRecentPrompts().filter(item => item.query !== normalized);
+    existing.unshift({
+        query: normalized,
+        dbName: dbName || currentDemoDbName(),
+        savedAt: new Date().toISOString()
+    });
+    writeRecentPrompts(existing);
+    renderRecentPrompts();
+}
+
+function cacheCurrentPromptForDemo() {
+    const ta = document.querySelector('textarea[name="nl_query"]');
+    if (!ta) return;
+    saveRecentPrompt(ta.value, currentDemoDbName());
+}
+
+function applyRecentPrompt(index) {
+    const item = readRecentPrompts()[index];
+    if (!item) return;
+    setNaturalLanguageQuery(item.query);
+    selectDemoDatabase(item.dbName || 'chinook_1.sqlite');
+    showToast('Recent input restored', 'info');
+}
+
+function clearRecentPrompts() {
+    writeRecentPrompts([]);
+    renderRecentPrompts();
+    showToast('Recent inputs cleared', 'info');
+}
+
+function renderRecentPrompts() {
+    const list = document.getElementById('recentPromptList');
+    if (!list) return;
+    list.innerHTML = '';
+    const items = readRecentPrompts();
+
+    if (!items.length) {
+        const empty = document.createElement('span');
+        empty.className = 'recent-empty';
+        empty.textContent = 'No recent inputs yet';
+        list.appendChild(empty);
+        return;
+    }
+
+    items.forEach((item, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'recent-prompt-pill';
+        button.dataset.recentPrompt = String(index);
+        button.addEventListener('click', () => applyRecentPrompt(index));
+
+        const db = document.createElement('span');
+        db.className = 'recent-db';
+        db.textContent = item.dbName === 'activity_1.sqlite' ? 'Activity' : 'Chinook';
+
+        const text = document.createElement('span');
+        text.className = 'recent-query';
+        text.textContent = item.query;
+
+        button.appendChild(db);
+        button.appendChild(text);
+        list.appendChild(button);
+    });
+}
+
 // 处理表单提交
 function handleFormSubmit(event) {
     event.preventDefault(); // 阻止默认表单提交
-    
+
     // 获取表单数据
     const form = event.target;
     const formData = new FormData(form);
     const dbName = formData.get('db_name');
     const nlQuery = formData.get('nl_query');
-    
+    const isHistoryMode = document.getElementById('from_history_mode')?.value === 'true';
+    const historyTime = document.getElementById('history_time')?.value || '';
+
+    if (isHistoryMode) {
+        if (!dbName || !nlQuery || !historyTime) {
+            showToast('History query data is incomplete', 'error');
+            return false;
+        }
+
+        const resultUrl = `/result?db_name=${encodeURIComponent(dbName)}&nl_query=${encodeURIComponent(nlQuery)}&time=${encodeURIComponent(historyTime)}&simulate_history=1`;
+        window.location.assign(resultUrl);
+        return false;
+    }
+
+    saveRecentPrompt(nlQuery, dbName);
+
     // 立即在客户端添加历史记录预览
+    let previewHistoryItem = null;
     if (dbName && nlQuery) {
-        addPreviewHistoryItem(dbName, nlQuery);
+        previewHistoryItem = addPreviewHistoryItem(dbName, nlQuery);
         showToast('New query added to history', 'info');
     }
-    
+
     // 使用AJAX提交表单，然后在新标签页中打开结果页面
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/', true);
-    
+
     xhr.onload = function() {
         if (xhr.status >= 200 && xhr.status < 300) {
             // 提取重定向URL
             const responseURL = xhr.responseURL;
-            
+            if (previewHistoryItem && responseURL) {
+                try {
+                    const redirect = new URL(responseURL, window.location.origin);
+                    const sessionId = redirect.searchParams.get('session_id') || '';
+                    if (sessionId) {
+                        previewHistoryItem.dataset.sessionId = sessionId;
+                        previewHistoryItem.dataset.dbName = dbName || '';
+                        previewHistoryItem.dataset.query = nlQuery || '';
+                    }
+                } catch (error) {
+                    console.warn('Could not attach session id to pending history preview:', error);
+                }
+            }
+
             // 在新标签页中打开结果页面
             window.open(responseURL, '_blank');
         } else {
@@ -3873,14 +4565,14 @@ function handleFormSubmit(event) {
             console.error('Form submission error:', xhr.statusText);
         }
     };
-    
+
     xhr.onerror = function() {
         showToast('Network error, please retry', 'error');
         console.error('Network error during form submission');
     };
-    
+
     xhr.send(formData);
-    
+
     return false;
 }
 
@@ -3888,11 +4580,11 @@ function handleFormSubmit(event) {
 function addPreviewHistoryItem(dbName, nlQuery) {
     const historyList = document.querySelector('.history-list');
     const timestamp = new Date().toLocaleString('zh-CN');
-    
+
     // 只取查询第一行并追加省略号（如有多行）
     const firstLineQuery = (nlQuery || '').toString().replace(/\r\n|\r/g, '\n').split('\n');
     const displayQuery = firstLineQuery.length > 0 ? (firstLineQuery[0] + (firstLineQuery.length > 1 ? ' ...' : '')) : '';
-    
+
     // 检查是否有上传的图片文件
     const refImageInput = document.getElementById('ref_image');
     let imageHtml = '';
@@ -3903,42 +4595,50 @@ function addPreviewHistoryItem(dbName, nlQuery) {
         const newFileName = `${currentHistory + 1}.${originalFileName.split('.').pop()}`;
         imageHtml = `
             <div class="history-image">
-                <i class="fa-solid fa-image"></i> 
-                <span class="uploaded-image-name clickable" onclick="previewHistoryImage('${newFileName}', event)">${originalFileName}</span>
+                <i class="fa-solid fa-image"></i>
+                <span class="uploaded-image-name clickable" onclick="previewHistoryImage('${newFileName}', event)">${escapeHtml(originalFileName)}</span>
             </div>
         `;
     }
-    
+
     // 创建新的历史记录项HTML
     const newHistoryItem = document.createElement('div');
     newHistoryItem.className = 'history-item active';
+    newHistoryItem.dataset.sessionId = '';
+    newHistoryItem.dataset.dbName = dbName || '';
+    newHistoryItem.dataset.query = nlQuery || '';
+    newHistoryItem.onclick = function() {
+        reopenPendingPreview(newHistoryItem);
+    };
     newHistoryItem.innerHTML = `
         <div class="history-content">
-            <div class="history-db"><i class="fa-solid fa-database"></i> Database: ${dbName}</div>
+            <div class="history-db"><i class="fa-solid fa-database"></i> ${escapeHtml(dbName)} <span class="history-type-badge pending">Working</span></div>
             <div class="history-time"><i class="fa-regular fa-clock"></i> ${timestamp}</div>
-            <div class="history-query"><i class="fa-solid fa-comment-dots"></i> ${displayQuery}</div>
+            <div class="history-query"><i class="fa-solid fa-comment-dots"></i> ${escapeHtml(displayQuery)}</div>
             ${imageHtml}
         </div>
         <div class="history-actions">
-            <button class="history-delete-btn" onclick="deleteHistoryItem(0, event)" title="删除此记录">
+            <button class="history-delete-btn" onclick="deleteHistoryItem(0, event)" title="Delete entry" aria-label="Delete history entry">
                 <i class="fa-solid fa-trash"></i>
             </button>
         </div>
     `;
-    
+
     // 移除其他active状态
     document.querySelectorAll('.history-item').forEach(item => {
         item.classList.remove('active');
     });
-    
+
     // 如果第一个是"No history yet"，先移除它
     const firstItem = historyList.firstElementChild;
     if (firstItem && firstItem.textContent.includes('No history yet')) {
         historyList.removeChild(firstItem);
     }
-    
+
     // 插入到最前面
     historyList.insertBefore(newHistoryItem, historyList.firstChild);
+    updateHistorySummary(document.querySelectorAll('.history-list .history-item').length);
+    return newHistoryItem;
 }
 
 // 刷新历史记录列表
@@ -3948,16 +4648,16 @@ function loadInteractiveChart(jsonPath) {
         console.error('No JSON path provided for interactive chart');
         return;
     }
-    
+
     console.log('Loading interactive chart from:', jsonPath);
-    
+
     // 获取图表容器
     const chartArea = document.getElementById('chartArea');
     if (!chartArea) {
         console.error('Chart area element not found');
         return;
     }
-    
+
     // 创建或获取可视化容器
     let visElement = document.getElementById('vis');
     if (!visElement) {
@@ -3966,11 +4666,11 @@ function loadInteractiveChart(jsonPath) {
         chartArea.innerHTML = '';
         chartArea.appendChild(visElement);
     }
-    
+
     // 添加加载指示器
     visElement.innerHTML = '<div class="loading">加载交互式图表中...</div>';
     chartArea.className = 'generated-code has-interactive-chart';
-    
+
     // 设置嵌入选项
     const embedOptions = {
         actions: true,  // 显示导出和编辑按钮
@@ -3980,7 +4680,7 @@ function loadInteractiveChart(jsonPath) {
         tooltip: true,  // 启用工具提示
         downloadFileName: 'visualization'  // 下载文件的默认名称
     };
-    
+
     // 加载并嵌入图表
     fetch(jsonPath)
         .then(response => {
@@ -3991,7 +4691,7 @@ function loadInteractiveChart(jsonPath) {
         })
         .then(spec => {
             console.log('Chart specification loaded successfully');
-            
+
             // 嵌入Vega-Lite图表
             return vegaEmbed('#vis', spec, embedOptions);
         })
@@ -4000,21 +4700,21 @@ function loadInteractiveChart(jsonPath) {
         })
         .catch(error => {
             console.error('Error with interactive chart:', error);
-            
+
             // 如果加载失败，显示错误消息并回退到静态图像
             visElement.innerHTML = `<div class="error-message">
                 <p>无法加载交互式图表: ${error.message}</p>
                 <p>正在尝试加载静态图像...</p>
             </div>`;
-            
+
             // 尝试加载静态PNG图像作为备选
             const imgPath = jsonPath.replace('.vega.json', '.png').replace('.json', '.png');
             console.log('Falling back to static image:', imgPath);
-            
+
             setTimeout(() => {
                 chartArea.className = 'generated-code has-image';
-                chartArea.innerHTML = `<img src="${imgPath}" alt="chart" 
-                    onload="console.log('Fallback image loaded successfully'); document.getElementById('downloadChartBtn').style.display = 'inline-block'; addImageClickEvent(this);" 
+                chartArea.innerHTML = `<img src="${imgPath}" alt="chart"
+                    onload="console.log('Fallback image loaded successfully'); document.getElementById('downloadChartBtn').style.display = 'inline-block'; addImageClickEvent(this);"
                     onerror="console.log('Fallback image also failed to load')">`;
             }, 2000);
         });
@@ -4035,48 +4735,89 @@ function refreshHistory() {
         });
 }
 
+function historyDisplayQuery(item) {
+    const nlq = (item.query || '').toString().replace(/\r\n|\r/g, '\n').split('\n');
+    return nlq.length > 0 ? (nlq[0] + (nlq.length > 1 ? ' ...' : '')) : '';
+}
+
+function buildHistoryItemHtml(item, index) {
+    const thumb = (item.results && item.results.chart_backup_name) || '';
+    const hasResult = Boolean(
+        thumb ||
+        (item.results && (item.results.chart_json_backup_name || item.results.vis_code || item.results.chart_json))
+    );
+    const displayQuery = historyDisplayQuery(item);
+    const noThumbClass = thumb ? '' : ' no-thumb';
+
+    let thumbHtml = '';
+    if (thumb) {
+        thumbHtml = `
+            <div class="history-thumb-wrap" title="Replay this history result">
+                <img class="history-thumb" src="/history/chart_result/${thumb}" alt="Chart preview" loading="lazy">
+            </div>`;
+    }
+
+    let badgesHtml = '';
+    if (hasResult) {
+        badgesHtml += '<span class="history-type-badge chart">Chart</span>';
+    } else if (item.status === 'error') {
+        badgesHtml += '<span class="history-type-badge pending">Error</span>';
+    } else {
+        badgesHtml += '<span class="history-type-badge pending">Working</span>';
+    }
+    if (item.uploaded_image_name) {
+        badgesHtml += '<span class="history-type-badge image">Ref</span>';
+    }
+
+    let refImageHtml = '';
+    if (item.uploaded_image_name) {
+        const displayName = item.original_image_name || item.uploaded_image_name;
+        refImageHtml = `
+            <div class="history-image">
+                <i class="fa-solid fa-image"></i>
+                <span class="uploaded-image-name clickable" onclick="previewHistoryImage('${item.uploaded_image_name}', event)">${displayName}</span>
+            </div>`;
+    }
+
+    return `
+        <div class="history-item${noThumbClass}" onclick="loadHistoryItem(${index})" data-index="${index}" style="--i: ${index}">
+            ${thumbHtml}
+            <div class="history-content">
+                <div class="history-db">
+                    <i class="fa-solid fa-database"></i> ${item.db_name}
+                    ${badgesHtml}
+                    <i class="fa-solid fa-arrow-up-right-from-square history-replay-icon" aria-hidden="true"></i>
+                </div>
+                <div class="history-time"><i class="fa-regular fa-clock"></i> ${item.time}</div>
+                <div class="history-query"><i class="fa-solid fa-comment-dots"></i> ${displayQuery}</div>
+                ${refImageHtml}
+            </div>
+            <div class="history-actions">
+                <button class="history-delete-btn" onclick="deleteHistoryItem(${index}, event)" title="Delete entry" aria-label="Delete history entry">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+        </div>`;
+}
+
 // 更新历史记录显示
 function updateHistoryDisplay(history) {
     const historyList = document.querySelector('.history-list');
-    
+
     if (history && history.length > 0) {
-        let historyHtml = '';
-        history.forEach((item, index) => {
-            let imageHtml = '';
-            
-            // 仅显示查询第一行，若有多行添加省略号
-            const nlq = (item.query || '').toString().replace(/\r\n|\r/g, '\n').split('\n');
-            const displayQuery = nlq.length > 0 ? (nlq[0] + (nlq.length > 1 ? ' ...' : '')) : '';
-            if (item.uploaded_image_name) {
-                const displayName = item.original_image_name || item.uploaded_image_name;
-                imageHtml = `
-                    <div class="history-image">
-                        <i class="fa-solid fa-image"></i> 
-                        <span class="uploaded-image-name clickable" onclick="previewHistoryImage('${item.uploaded_image_name}', event)">${displayName}</span>
-                    </div>
-                `;
-            }
-            
-            historyHtml += `
-                <div class="history-item" onclick="loadHistoryItem(${index})" data-index="${index}">
-                    <div class="history-content">
-                        <div class="history-db"><i class="fa-solid fa-database"></i> Database: ${item.db_name}</div>
-                        <div class="history-time"><i class="fa-regular fa-clock"></i> ${item.time}</div>
-                        <div class="history-query"><i class="fa-solid fa-comment-dots"></i> ${displayQuery}</div>
-                        ${imageHtml}
-                    </div>
-                    <div class="history-actions">
-                        <button class="history-delete-btn" onclick="deleteHistoryItem(${index}, event)" title="删除此记录">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-            `;
-        });
-        historyList.innerHTML = historyHtml;
+        historyList.innerHTML = history.map((item, index) => buildHistoryItemHtml(item, index)).join('');
+        updateHistorySummary(history.length);
     } else {
         historyList.innerHTML = '<div class="history-item" style="text-align:center;opacity:0.7;">No history yet.</div>';
+        updateHistorySummary(0);
     }
+}
+
+function updateHistorySummary(count) {
+    const summary = document.getElementById('historySummary');
+    if (!summary) return;
+    const label = count === 1 ? 'session' : 'sessions';
+    summary.textContent = `Click a session to replay · ${count} ${label}`;
 }
 
 // 图片缩放相关变量已在前面定义
@@ -4085,21 +4826,21 @@ function updateHistoryDisplay(history) {
 function openImageModal(imageSrc) {
     const modal = document.getElementById('imageModal');
     const modalImage = document.getElementById('modalImage');
-    
+
     modalImage.src = imageSrc;
     modal.classList.add('active');
-    
+
     // 重置缩放状态
     currentZoom = 1;
     updateImageZoom();
     updateZoomButtons();
-    
+
     // 阻止页面滚动
     document.body.style.overflow = 'hidden';
-    
+
     // 添加ESC键关闭功能
     document.addEventListener('keydown', handleEscapeKey);
-    
+
     // 添加鼠标滚轮缩放功能
     modal.addEventListener('wheel', handleImageZoom, { passive: false });
 }
@@ -4110,13 +4851,13 @@ function closeModalDirectly(event) {
         event.stopPropagation();
         event.preventDefault();
     }
-    
+
     const modal = document.getElementById('imageModal');
     modal.classList.remove('active');
-    
+
     // 恢复页面滚动
     document.body.style.overflow = '';
-    
+
     // 移除事件监听器
     document.removeEventListener('keydown', handleEscapeKey);
     modal.removeEventListener('wheel', handleImageZoom);
@@ -4125,14 +4866,14 @@ function closeModalDirectly(event) {
 function closeImageModal(event) {
     // 如果点击的是图片本身、缩放按钮或缩放控制区域，不关闭模态框
     if (event && (
-        event.target.tagName === 'IMG' || 
+        event.target.tagName === 'IMG' ||
         event.target.closest('.image-zoom-btn') ||
         event.target.closest('.image-zoom-controls') ||
         event.target.closest('.image-modal-close')
     )) {
         return;
     }
-    
+
     // 点击背景区域关闭模态框
     closeModalDirectly();
 }
@@ -4149,7 +4890,7 @@ function zoomImage(factor, event) {
         event.stopPropagation();
         event.preventDefault();
     }
-    
+
     const newZoom = currentZoom * factor;
     if (newZoom >= minZoom && newZoom <= maxZoom) {
         currentZoom = newZoom;
@@ -4169,7 +4910,7 @@ function updateImageZoom() {
 function updateZoomButtons() {
     const zoomInBtn = document.getElementById('zoomInBtn');
     const zoomOutBtn = document.getElementById('zoomOutBtn');
-    
+
     zoomInBtn.disabled = currentZoom >= maxZoom;
     zoomOutBtn.disabled = currentZoom <= minZoom;
 }
@@ -4184,7 +4925,7 @@ function updateButtonPositions() {
 function handleImageZoom(event) {
     event.preventDefault();
     event.stopPropagation();
-    
+
     const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
     zoomImage(zoomFactor);
 }
@@ -4203,18 +4944,18 @@ function previewUploadedImage(file) {
         showToast('Invalid image file', 'error');
         return;
     }
-    
+
     // 创建FileReader读取文件
     const reader = new FileReader();
     reader.onload = function(e) {
         const imageDataUrl = e.target.result;
         openImageModal(imageDataUrl);
     };
-    
+
     reader.onerror = function() {
         showToast('Error reading image file', 'error');
     };
-    
+
     // 以DataURL形式读取文件
     reader.readAsDataURL(file);
 }
@@ -4227,26 +4968,35 @@ function previewHistoryImage(imageName, event) {
         event.stopPropagation();
         event.preventDefault();
     }
-    
+
     if (!imageName) {
         showToast('Image not found', 'error');
         return;
     }
-    
+
     // 构建图片URL
     const imageUrl = `/history/input/${imageName}`;
-    
+
     // 打开图片模态框
     openImageModal(imageUrl);
 }
 
 // 启动新的生成查询
 function startNewGeneration() {
+    const historyModeInput = document.getElementById('from_history_mode');
+    const historyTimeInput = document.getElementById('history_time');
+    if (historyModeInput) {
+        historyModeInput.value = 'false';
+    }
+    if (historyTimeInput) {
+        historyTimeInput.value = '';
+    }
+
     // 清除所有历史记录项的active状态
     document.querySelectorAll('.history-item').forEach(item => {
         item.classList.remove('active');
     });
-    
+
     // 清除所有弹窗
     Object.keys(currentPopups).forEach(key => {
         if (currentPopups[key]) {
@@ -4254,53 +5004,61 @@ function startNewGeneration() {
             currentPopups[key] = null;
         }
     });
-    
+
     // NEW GENERATION按钮现在始终显示，无需隐藏
-    
+
     // 清空所有表单字段
+    const defaultDbName = 'chinook_1.sqlite';
     const dbNameInput = document.querySelector('input[name="db_name"]');
-    if (dbNameInput) dbNameInput.value = '';
-    
+    if (dbNameInput) dbNameInput.value = defaultDbName;
+    const dbFileNameEl = document.getElementById('db-file-name');
+    if (dbFileNameEl) dbFileNameEl.innerText = defaultDbName;
+
     const nlQueryTextarea = document.querySelector('textarea[name="nl_query"]');
     if (nlQueryTextarea) nlQueryTextarea.value = '';
-    
+
     // 清空结果显示区域
     const generatedCodeArea = document.getElementById('generatedCodeArea');
     if (generatedCodeArea) {
         generatedCodeArea.innerHTML = '<pre class="syntax-highlighted"><code class="language-python">-- The generated visualizing code and its iteration \nprocess will be displayed here --</code></pre>';
     }
-    
+
     const chartArea = document.getElementById('chartArea');
     if (chartArea) {
         chartArea.className = 'generated-code';
         chartArea.innerHTML = '-- The chart will be displayed here --';
     }
-    
+
     const evalArea = document.getElementById('evalArea');
     if (evalArea) {
         evalArea.innerText = '-- The evaluation results will be displayed here --';
     }
-    
+
     const evalSummary = document.getElementById('evalSummary');
     if (evalSummary) {
         evalSummary.innerHTML = '-- Evaluation Results: Waiting --';
         evalSummary.className = 'eval-summary';
         evalSummary.title = '';
     }
-    
+
     // 隐藏所有复制/下载按钮（如果存在）
     const copyCodeBtn = document.getElementById('copyCodeBtn');
     if (copyCodeBtn) copyCodeBtn.style.display = 'none';
-    
+
     const downloadChartBtn = document.getElementById('downloadChartBtn');
     if (downloadChartBtn) downloadChartBtn.style.display = 'none';
-    
+
     // 清除所有上传的文件（使用clearAllUploads函数，不显示提示）
     clearAllUploads(false);
-    
+    if (dbNameInput) dbNameInput.value = defaultDbName;
+    if (dbFileNameEl) dbFileNameEl.innerText = defaultDbName;
+    if (typeof loadDbStructureByName === 'function') {
+        loadDbStructureByName(defaultDbName);
+    }
+
     // 显示成功提示
     showToast('New generation window is ready!', 'success');
-    
+
     // 滚动到表单顶部
     document.querySelector('.form-section').scrollIntoView({ behavior: 'smooth' });
 }
@@ -4310,7 +5068,7 @@ function initSidebarToggle() {
     const closeSidebarBtn = document.getElementById('closeSidebarBtn');
     const openSidebarBtn = document.getElementById('openSidebarBtn');
     const layout = document.querySelector('.layout');
-    
+
     // 检查元素是否存在
     if (!closeSidebarBtn || !openSidebarBtn || !layout) {
         console.error('侧边栏元素未找到:', {
@@ -4320,44 +5078,176 @@ function initSidebarToggle() {
         });
         return;
     }
-    
-    // 关闭边栏
+
     closeSidebarBtn.addEventListener('click', function(event) {
         event.preventDefault();
         event.stopPropagation();
-        layout.classList.add('sidebar-collapsed');
-        // 保存状态到本地存储
-        localStorage.setItem('sidebarCollapsed', 'true');
-        console.log('关闭侧边栏');
+        setSidebarOpen(false);
     });
-    
-    // 打开边栏
+
     openSidebarBtn.addEventListener('click', function(event) {
         event.preventDefault();
         event.stopPropagation();
-        layout.classList.remove('sidebar-collapsed');
-        // 保存状态到本地存储
-        localStorage.setItem('sidebarCollapsed', 'false');
-        console.log('打开侧边栏');
+        setSidebarOpen(true);
     });
-    
-    // 从本地存储恢复边栏状态
-    if (localStorage.getItem('sidebarCollapsed') === 'true') {
+
+    const backdrop = document.getElementById('sidebarBackdrop');
+    if (backdrop) {
+        backdrop.addEventListener('click', function() {
+            setSidebarOpen(false);
+        });
+    }
+
+    if (!isMobileSidebar()) {
+        try {
+            if (localStorage.getItem('sidebarCollapsed') === 'true') {
+                layout.classList.add('sidebar-collapsed');
+            }
+        } catch (_) {}
+    }
+}
+
+function selectDemoDatabase(dbName) {
+    const dbNameEl = document.getElementById('db_name');
+    const dbFileNameEl = document.getElementById('db-file-name');
+    if (dbNameEl) dbNameEl.value = dbName;
+    if (dbFileNameEl) dbFileNameEl.innerText = dbName;
+    if (typeof loadDbStructureByName === 'function') {
+        loadDbStructureByName(dbName);
+    }
+    showToast('Database: ' + dbName, 'info');
+}
+
+function applyQuickQuery(queryText, dbName) {
+    const ta = document.querySelector('textarea[name="nl_query"]');
+    setNaturalLanguageQuery(queryText);
+    if (dbName) selectDemoDatabase(dbName);
+    if (ta) ta.focus();
+    showToast('Example query applied — click Generate', 'info');
+}
+
+function toggleSchemaPanel(event) {
+    if (event) event.stopPropagation();
+    const section = document.getElementById('dbStructureSection');
+    if (!section) return;
+    section.classList.toggle('schema-collapsed');
+    const collapsed = section.classList.contains('schema-collapsed');
+    const label = document.getElementById('schemaToggleLabel');
+    if (label) label.textContent = collapsed ? 'Expand' : 'Collapse';
+    try {
+        localStorage.setItem('mv_schema_collapsed', collapsed ? '1' : '0');
+    } catch (_) {}
+}
+
+function expandSchemaPanel() {
+    const section = document.getElementById('dbStructureSection');
+    if (section) {
+        section.classList.remove('schema-collapsed');
+        const label = document.getElementById('schemaToggleLabel');
+        if (label) label.textContent = 'Collapse';
+    }
+}
+
+function isMobileSidebar() {
+    return window.innerWidth < 900;
+}
+
+function setSidebarOpen(open) {
+    const layout = document.querySelector('.layout');
+    const backdrop = document.getElementById('sidebarBackdrop');
+    if (!layout) return;
+    const mobile = isMobileSidebar();
+        if (open) {
+        layout.classList.remove('sidebar-collapsed');
+        if (mobile) {
+            layout.classList.add('sidebar-drawer-open');
+            if (backdrop) {
+                backdrop.classList.add('visible');
+                backdrop.setAttribute('aria-hidden', 'false');
+            }
+            document.body.classList.add('mv-sidebar-open');
+        }
+    } else {
         layout.classList.add('sidebar-collapsed');
+        layout.classList.remove('sidebar-drawer-open');
+        if (backdrop) {
+            backdrop.classList.remove('visible');
+            backdrop.setAttribute('aria-hidden', 'true');
+        }
+        document.body.classList.remove('mv-sidebar-open');
+    }
+    if (!mobile) {
+        try {
+            localStorage.setItem('sidebarCollapsed', open ? 'false' : 'true');
+        } catch (_) {}
+    }
+}
+
+function closeMobileSidebar() {
+    if (isMobileSidebar()) {
+        setSidebarOpen(false);
+    }
+}
+
+function initMobileLayout() {
+    const layout = document.querySelector('.layout');
+    const backdrop = document.getElementById('sidebarBackdrop');
+    if (!layout) return;
+    if (isMobileSidebar()) {
+        layout.classList.add('sidebar-collapsed');
+        layout.classList.remove('sidebar-drawer-open');
+        backdrop?.classList.remove('visible');
+        document.body.classList.remove('mv-sidebar-open');
+    } else {
+        layout.classList.remove('sidebar-drawer-open');
+        backdrop?.classList.remove('visible');
+        document.body.classList.remove('mv-sidebar-open');
+        try {
+            if (localStorage.getItem('sidebarCollapsed') === 'true') {
+                layout.classList.add('sidebar-collapsed');
+            } else {
+                layout.classList.remove('sidebar-collapsed');
+            }
+        } catch (_) {}
     }
 }
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
-    // 初始化边栏折叠/展开功能
-    console.log('DOM加载完成，初始化侧边栏功能');
-    
-    // 确保在DOM完全加载后再初始化
+    console.log('DOM loaded — init sidebar');
+
     setTimeout(function() {
         initSidebarToggle();
     }, 100);
+
+    initMobileLayout();
+    window.addEventListener('resize', initMobileLayout);
+
+    const schemaCollapsed = localStorage.getItem('mv_schema_collapsed');
+    if (schemaCollapsed === '0' && window.innerWidth >= 900) {
+        document.getElementById('dbStructureSection')?.classList.remove('schema-collapsed');
+        const label = document.getElementById('schemaToggleLabel');
+        if (label) label.textContent = 'Collapse';
+    }
+
+    const defaultDb = document.getElementById('db_name')?.value || 'chinook_1.sqlite';
+    if (defaultDb && !document.getElementById('db-file-name')?.innerText) {
+        const dbNameEl = document.getElementById('db_name');
+        const dbFileNameEl = document.getElementById('db-file-name');
+        if (dbNameEl) dbNameEl.value = defaultDb;
+        if (dbFileNameEl) dbFileNameEl.innerText = defaultDb;
+        if (typeof loadDbStructureByName === 'function') {
+            loadDbStructureByName(defaultDb);
+        }
+    }
+
+    renderRecentPrompts();
+    const nlQueryTextarea = document.querySelector('textarea[name="nl_query"]');
+    if (nlQueryTextarea) {
+        nlQueryTextarea.addEventListener('blur', cacheCurrentPromptForDemo);
+    }
 });
 
 </script>
 </body>
-</html> 
+</html>

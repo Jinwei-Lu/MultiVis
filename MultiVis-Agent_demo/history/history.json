@@ -1,0 +1,70 @@
+[
+  {
+    "db_name": "activity_1.sqlite",
+    "query": "Create a stacked bar chart showing the number of students and faculty participating in each activity, with activities on the x-axis and participant type shown in different colors.",
+    "time": "2026-05-19 10:30:00",
+    "results": {
+      "chart_img": "/history/chart_result/4.png",
+      "chart_json": "/history/chart_json/4.vega.json",
+      "chart_backup_name": "4.png",
+      "chart_json_backup_name": "4.vega.json",
+      "sql": "SELECT a.activity_name, 'Student' AS participant_type, COUNT(*) AS participant_count\nFROM Participates_in p JOIN Activity a ON a.actid = p.actid\nGROUP BY a.activity_name\nUNION ALL\nSELECT a.activity_name, 'Faculty', COUNT(*)\nFROM Faculty_Participates_in fp JOIN Activity a ON a.actid = fp.actid\nGROUP BY a.activity_name;",
+      "eval_result": "=== Evaluation Results ===\n✅ Passed — Clear stacked bar chart with legend and readable activity labels.",
+      "vis_code": "# Stacked bar chart — Activity participants by role\nimport altair as alt\nimport pandas as pd\nimport sqlite3\n\ncon = sqlite3.connect('database/activity_1.sqlite')\nfaculty = pd.read_sql_query(\n    \"\"\"\n    SELECT a.activity_name,\n           'Faculty' AS participant_type,\n           COUNT(*) AS participant_count\n    FROM Faculty_Participates_in fp\n    JOIN Activity a ON a.actid = fp.actid\n    GROUP BY a.activity_name\n    \"\"\",\n    con,\n)\nstudents = pd.read_sql_query(\n    \"\"\"\n    SELECT a.activity_name,\n           'Student' AS participant_type,\n           COUNT(*) AS participant_count\n    FROM Participates_in p\n    JOIN Activity a ON a.actid = p.actid\n    GROUP BY a.activity_name\n    \"\"\",\n    con,\n)\ndf = pd.concat([students, faculty], ignore_index=True)\n\nchart = (\n    alt.Chart(df)\n    .mark_bar()\n    .encode(\n        x=alt.X('activity_name:N', title='Activity'),\n        y=alt.Y('participant_count:Q', title='Number of Participants'),\n        color=alt.Color('participant_type:N', title='Participant Type'),\n        order=alt.Order('participant_type:N', sort='descending'),\n    )\n    .properties(\n        title='Number of Students and Faculty Participating in Each Activity'\n    )\n)\nchart\n",
+      "is_database_code": false
+    },
+    "uploaded_image_name": null,
+    "original_image_name": null
+  },
+  {
+    "db_name": "activity_1.sqlite",
+    "query": "Scatter plot: average student age per activity vs overall average. Use a red-blue color scheme and add a descriptive title.",
+    "time": "2026-05-19 09:15:00",
+    "results": {
+      "chart_img": "/history/chart_result/3.png",
+      "chart_json": "/history/chart_json/3.vega.json",
+      "chart_backup_name": "3.png",
+      "chart_json_backup_name": "3.vega.json",
+      "eval_result": "=== Evaluation Results ===\n✅ Passed — Reference-consistent scatter with red-blue encoding.",
+      "vis_code": "# Reference-matched scatter plot — Average student age per activity\nimport altair as alt\nimport pandas as pd\nimport sqlite3\n\ncon = sqlite3.connect('database/activity_1.sqlite')\ndf = pd.read_sql_query(\n    \"\"\"\n    SELECT a.activity_name,\n           AVG(s.age) AS avg_age\n    FROM Participates_in p\n    JOIN Student s ON s.StuID = p.StuID\n    JOIN Activity a ON a.actid = p.actid\n    GROUP BY a.activity_name\n    \"\"\",\n    con,\n)\noverall = df['avg_age'].mean()\ndf['delta'] = df['avg_age'] - overall\n\nchart = (\n    alt.Chart(df)\n    .mark_circle(size=120)\n    .encode(\n        x=alt.X('activity_name:N', title='Activity', sort='-y'),\n        y=alt.Y('avg_age:Q', title='Average Age', scale=alt.Scale(zero=False)),\n        color=alt.Color(\n            'delta:Q',\n            scale=alt.Scale(scheme='redblue', domainMid=0),\n            title='Δ vs Overall',\n        ),\n        tooltip=['activity_name', 'avg_age', 'delta'],\n    )\n    .properties(title='Average Student Age per Activity (vs Overall Average)')\n)\nchart\n",
+      "is_database_code": false
+    },
+    "uploaded_image_name": "3.png",
+    "original_image_name": "reference_scatter.png"
+  },
+  {
+    "db_name": "chinook_1.sqlite",
+    "query": "Colorful pie chart of track counts per music genre from chinook_1.sqlite, sorted by size, using Altair.",
+    "time": "2026-05-19 08:45:00",
+    "results": {
+      "chart_img": "/history/chart_result/2.png",
+      "chart_json": "/history/chart_json/2.vega.json",
+      "chart_backup_name": "2.png",
+      "chart_json_backup_name": "2.vega.json",
+      "sql": "SELECT g.Name AS genre, COUNT(t.TrackId) AS tracks\nFROM Track t JOIN Genre g ON g.GenreId = t.GenreId\nGROUP BY g.Name ORDER BY tracks DESC;",
+      "eval_result": "=== Evaluation Results ===\n✅ Passed — Genre distribution pie chart with tooltips.",
+      "vis_code": "# Pie chart — Track counts per music genre\nimport altair as alt\nimport pandas as pd\nimport sqlite3\n\ncon = sqlite3.connect('database/chinook_1.sqlite')\ndf = pd.read_sql_query(\n    \"\"\"\n    SELECT g.Name AS genre, COUNT(t.TrackId) AS tracks\n    FROM Track t\n    JOIN Genre g ON g.GenreId = t.GenreId\n    GROUP BY g.Name\n    ORDER BY tracks DESC\n    \"\"\",\n    con,\n)\n\nchart = (\n    alt.Chart(df)\n    .mark_arc(innerRadius=40)\n    .encode(\n        theta=alt.Theta('tracks:Q', stack=True),\n        color=alt.Color('genre:N', scale=alt.Scale(scheme='tableau20'), title='Genre'),\n        order=alt.Order('tracks:Q', sort='descending'),\n        tooltip=['genre', 'tracks'],\n    )\n    .properties(title='Track Count by Music Genre (Chinook)')\n)\nchart\n",
+      "is_database_code": false
+    },
+    "uploaded_image_name": null,
+    "original_image_name": null
+  },
+  {
+    "db_name": "activity_1.sqlite",
+    "query": "Improve the age-delta chart: rotate x-axis labels, add y-axis grid lines, and use larger hollow points with the same color scheme.",
+    "time": "2026-05-19 08:00:00",
+    "results": {
+      "chart_img": "/history/chart_result/1.png",
+      "chart_json": "/history/chart_json/1.vega.json",
+      "chart_backup_name": "1.png",
+      "chart_json_backup_name": "1.vega.json",
+      "eval_result": "=== Evaluation Results ===\n✅ Passed — Improved readability with rotated labels and grid.",
+      "vis_code": "# Refined scatter — rotated labels, grid, hollow points\nimport altair as alt\nimport pandas as pd\nimport sqlite3\n\ncon = sqlite3.connect('database/activity_1.sqlite')\ndf = pd.read_sql_query(\n    \"\"\"\n    SELECT a.activity_name,\n           AVG(s.age) AS avg_age\n    FROM Participates_in p\n    JOIN Student s ON s.StuID = p.StuID\n    JOIN Activity a ON a.actid = p.actid\n    GROUP BY a.activity_name\n    \"\"\",\n    con,\n)\noverall = df['avg_age'].mean()\ndf['delta'] = df['avg_age'] - overall\n\nchart = (\n    alt.Chart(df)\n    .mark_point(size=180, filled=False, strokeWidth=2.2)\n    .encode(\n        x=alt.X(\n            'activity_name:N',\n            title='Activity',\n            sort='-y',\n            axis=alt.Axis(labelAngle=-35, labelLimit=200),\n        ),\n        y=alt.Y(\n            'avg_age:Q',\n            title='Average Age',\n            scale=alt.Scale(zero=False),\n            axis=alt.Axis(grid=True, gridDash=[2, 2], gridOpacity=0.5),\n        ),\n        color=alt.Color(\n            'delta:Q',\n            scale=alt.Scale(scheme='redblue', domainMid=0),\n            title='Δ vs Overall',\n        ),\n        tooltip=['activity_name', 'avg_age', 'delta'],\n    )\n    .properties(\n        title='Average Student Age per Activity — Refined View',\n        width='container',\n        height=380,\n    )\n)\nchart\n",
+      "mod_code": "# Reference-matched scatter plot — Average student age per activity\nimport altair as alt\nimport pandas as pd\nimport sqlite3\n\ncon = sqlite3.connect('database/activity_1.sqlite')\ndf = pd.read_sql_query(\n    \"\"\"\n    SELECT a.activity_name,\n           AVG(s.age) AS avg_age\n    FROM Participates_in p\n    JOIN Student s ON s.StuID = p.StuID\n    JOIN Activity a ON a.actid = p.actid\n    GROUP BY a.activity_name\n    \"\"\",\n    con,\n)\noverall = df['avg_age'].mean()\ndf['delta'] = df['avg_age'] - overall\n\nchart = (\n    alt.Chart(df)\n    .mark_circle(size=120)\n    .encode(\n        x=alt.X('activity_name:N', title='Activity', sort='-y'),\n        y=alt.Y('avg_age:Q', title='Average Age', scale=alt.Scale(zero=False)),\n        color=alt.Color(\n            'delta:Q',\n            scale=alt.Scale(scheme='redblue', domainMid=0),\n            title='Δ vs Overall',\n        ),\n        tooltip=['activity_name', 'avg_age', 'delta'],\n    )\n    .properties(title='Average Student Age per Activity (vs Overall Average)')\n)\nchart\n",
+      "code": "# Reference-matched scatter plot — Average student age per activity\nimport altair as alt\nimport pandas as pd\nimport sqlite3\n\ncon = sqlite3.connect('database/activity_1.sqlite')\ndf = pd.read_sql_query(\n    \"\"\"\n    SELECT a.activity_name,\n           AVG(s.age) AS avg_age\n    FROM Participates_in p\n    JOIN Student s ON s.StuID = p.StuID\n    JOIN Activity a ON a.actid = p.actid\n    GROUP BY a.activity_name\n    \"\"\",\n    con,\n)\noverall = df['avg_age'].mean()\ndf['delta'] = df['avg_age'] - overall\n\nchart = (\n    alt.Chart(df)\n    .mark_circle(size=120)\n    .encode(\n        x=alt.X('activity_name:N', title='Activity', sort='-y'),\n        y=alt.Y('avg_age:Q', title='Average Age', scale=alt.Scale(zero=False)),\n        color=alt.Color(\n            'delta:Q',\n            scale=alt.Scale(scheme='redblue', domainMid=0),\n            title='Δ vs Overall',\n        ),\n        tooltip=['activity_name', 'avg_age', 'delta'],\n    )\n    .properties(title='Average Student Age per Activity (vs Overall Average)')\n)\nchart\n",
+      "is_database_code": true
+    },
+    "uploaded_image_name": null,
+    "original_image_name": null
+  }
+]

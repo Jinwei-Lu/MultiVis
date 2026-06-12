@@ -25,11 +25,11 @@ class DatabaseQueryAgent(Agent):
     该智能体主要依赖LLM的结构化理解能力和SQL生成能力。
     """
     
-    def __init__(self, model_type: str = "gemini-2.0-flash@gemini-2.0-flash", agent_name: str = "database_query_agent", agent_id: str = 0, use_log: bool = False):
+    def __init__(self, model_type: str = "gemini-3-flash-preview@gemini-3-flash-preview", agent_name: str = "database_query_agent", agent_id: str = 0, use_log: bool = False):
         """初始化数据库与查询智能体
         
         Args:
-            model_type: 使用的模型种类，格式为text_model@img_model，默认为gemini-2.0-flash@gemini-2.0-flash
+            model_type: 使用的模型种类，格式为text_model@img_model，默认为gemini-3-flash-preview@gemini-3-flash-preview
             agent_name: 智能体名称
             agent_id: 智能体ID
         """
@@ -1019,7 +1019,7 @@ if __name__ == "__main__":
     os.makedirs("./logs", exist_ok=True)
     
     # 初始化数据库与查询智能体
-    db_agent = DatabaseQueryAgent(model_type="gemini-2.0-flash@gemini-2.0-flash", agent_id=50, use_log=True)
+    db_agent = DatabaseQueryAgent(model_type="gemini-3-flash-preview@gemini-3-flash-preview", agent_id=50, use_log=True)
     
     db_agent._log("\n===== 测试 DatabaseQueryAgent =====")
     

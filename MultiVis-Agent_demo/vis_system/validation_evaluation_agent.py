@@ -25,11 +25,11 @@ class ValidationEvaluationAgent(Agent):
     该智能体依赖LLM的评估能力、可视化库的执行能力和图像比较能力。
     """
     
-    def __init__(self, model_type: str = "gemini-2.0-flash@gemini-2.0-flash", agent_name: str = "validation_evaluation_agent", agent_id: str = 0, use_log: bool = False):
+    def __init__(self, model_type: str = "gemini-3-flash-preview@gemini-3-flash-preview", agent_name: str = "validation_evaluation_agent", agent_id: str = 0, use_log: bool = False):
         """初始化验证评估智能体
         
         Args:
-            model_type: 使用的模型种类，格式为text_model@img_model，默认为gemini-2.0-flash@gemini-2.0-flash
+            model_type: 使用的模型种类，格式为text_model@img_model，默认为gemini-3-flash-preview@gemini-3-flash-preview
             log_folder: 日志文件路径
         """
         system_prompt = """You are a specialized data visualization validator who rigorously evaluates visualization code against both technical standards and user requirements."""
@@ -848,7 +848,7 @@ if __name__ == "__main__":
     os.makedirs("./logs", exist_ok=True)
     
     # 初始化验证评估智能体
-    validation_agent = ValidationEvaluationAgent(model_type="gemini-2.0-flash@gemini-2.0-flash", agent_id=108, use_log=True)
+    validation_agent = ValidationEvaluationAgent(model_type="gemini-3-flash-preview@gemini-3-flash-preview", agent_id=108, use_log=True)
     
     validation_agent._log("\n===== 测试 ValidationEvaluationAgent =====")
     

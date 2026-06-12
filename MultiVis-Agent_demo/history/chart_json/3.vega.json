@@ -1,0 +1,99 @@
+{
+  "config": {
+    "view": {
+      "continuousWidth": 300,
+      "continuousHeight": 300
+    }
+  },
+  "data": {
+    "name": "data-7c9b3aa3a6f307e68f4dd6ec4f26d66b"
+  },
+  "mark": {
+    "type": "point"
+  },
+  "encoding": {
+    "color": {
+      "field": "Age_Delta",
+      "scale": {
+        "domainMid": 0,
+        "scheme": "redblue"
+      },
+      "title": "Age Delta",
+      "type": "quantitative"
+    },
+    "x": {
+      "field": "activity_name",
+      "title": "Activity Name",
+      "type": "nominal"
+    },
+    "y": {
+      "field": "Age_Delta",
+      "title": "Age Delta (Years)",
+      "type": "quantitative"
+    }
+  },
+  "title": "Difference in Average Age by Activity",
+  "transform": [
+    {
+      "calculate": "datum.Avg_Age - 19.692063492063493",
+      "as": "Age_Delta"
+    }
+  ],
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.20.1.json",
+  "datasets": {
+    "data-7c9b3aa3a6f307e68f4dd6ec4f26d66b": [
+      {
+        "activity_name": "Mountain Climbing",
+        "Avg_Age": 21.166666666666668
+      },
+      {
+        "activity_name": "Canoeing",
+        "Avg_Age": 20.5
+      },
+      {
+        "activity_name": "Kayaking",
+        "Avg_Age": 18.4
+      },
+      {
+        "activity_name": "Spelunking",
+        "Avg_Age": 18.666666666666668
+      },
+      {
+        "activity_name": "Extreme Canasta",
+        "Avg_Age": 19.5
+      },
+      {
+        "activity_name": "Soccer",
+        "Avg_Age": 19.444444444444443
+      },
+      {
+        "activity_name": "Baseball",
+        "Avg_Age": 19.2
+      },
+      {
+        "activity_name": "Football",
+        "Avg_Age": 19.785714285714285
+      },
+      {
+        "activity_name": "Volleyball",
+        "Avg_Age": 18.5
+      },
+      {
+        "activity_name": "Canasta",
+        "Avg_Age": 21.333333333333332
+      },
+      {
+        "activity_name": "Chess",
+        "Avg_Age": 18.5
+      },
+      {
+        "activity_name": "Crossword Puzzles",
+        "Avg_Age": 19.0
+      },
+      {
+        "activity_name": "Proselytizing",
+        "Avg_Age": 22.0
+      }
+    ]
+  }
+}
