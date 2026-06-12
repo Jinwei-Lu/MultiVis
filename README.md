@@ -55,7 +55,7 @@ python app.py
 
 The script starts the frontend on a local port and users can interact with multi-agent system on the web page.
 
-**[Update]** The UI has been optimized. You can now also extract `\MultiVis-Agent_demo\MultiVisAgent-windows.zip` and simply run `MultiVisAgent.exe` to launch the frontend system with one click.
+**[Update]** The UI has been optimized. The demo is kept as source code under `MultiVis-Agent_demo/`; install `MultiVis-Agent_demo/requirements.txt` and run `python app.py` from that directory to launch the frontend locally.
 <img width="2486" height="1243" alt="Frontend_UI" src="https://github.com/user-attachments/assets/05bed29e-b7d8-4eef-af80-e68aa1922d1b" />
 
 

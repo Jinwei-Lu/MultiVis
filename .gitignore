@@ -1,0 +1,65 @@
+# OS and editor noise
+.DS_Store
+Thumbs.db
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local Python environments
+.venv/
+venv/
+.env
+.env.*
+.env/
+.build-venv/
+
+# Runtime and demo outputs
+logs/
+temp/
+test_tmp/
+tmp/
+outputs/
+static/uploads/
+/chart.json
+/altair-data-*.json
+
+# Build and packaging artifacts
+build/
+dist/
+dist-source/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.zst
+*.app/
+*.exe
+
+# Demo packaging/distribution helpers
+/MultiVis-Agent_demo/.dockerignore
+/MultiVis-Agent_demo/docker/
+/MultiVis-Agent_demo/packaging/
+/MultiVis-Agent_demo/PACKAGING.md
+/MultiVis-Agent_demo/*SOURCE_README.md
+/MultiVis-Agent_demo/MultiVisAgent.spec
+/MultiVis-Agent_demo/build_desktop.sh
+/MultiVis-Agent_demo/requirements-build.txt
+/MultiVis-Agent_demo/start_*.bat
+/MultiVis-Agent_demo/start_*.command
+/MultiVis-Agent_demo/scripts/*.sh
+
+# Local manuscript/demo collateral and nested clones
+/Paper/
+/Presentation/
+/paper_demo/
+/poster/
+/overleaf-*/
+
+# Exported demo/package directories
+/MultiVisAgent-windows/
+/yuanma/
